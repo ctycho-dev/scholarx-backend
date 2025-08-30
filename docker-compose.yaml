@@ -1,0 +1,74 @@
+version: "3.8"
+
+x-healthcheck-mongodb-template: &mongodbhealthcheck
+  healthcheck:
+    test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+    interval: 30s
+    timeout: 30s
+    retries: 3
+
+x-healthcheck-redis-template: &redishealthcheck
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 30s
+    timeout: 30s
+    retries: 3
+
+x-healthcheck-backend: &backendhealthcheck
+  healthcheck:
+    test: ["CMD", "sh", "-c", "echo 'Checking backend health via /health' && curl -f http://localhost:8000/health || exit 1"]
+    interval: 30s
+    timeout: 10s
+    retries: 5
+
+services:
+  web:
+    image: athenax-backend
+    build: .
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - athenax_network
+    <<: *backendhealthcheck
+
+  mongodb:
+    image: mongo:7.0.14
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    env_file:
+      - .env
+    networks:
+      - athenax_network
+    restart: always
+    <<: *mongodbhealthcheck
+
+  redis:
+    image: redis:alpine3.20
+    container_name: redis-server
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - athenax_network
+    command: ["redis-server", "--bind", "0.0.0.0"]
+    <<: *redishealthcheck
+
+networks:
+  athenax_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  mongodb_config:
