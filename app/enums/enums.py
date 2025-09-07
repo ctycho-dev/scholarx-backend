@@ -53,17 +53,12 @@ class AuthProvider(str, Enum):
 class ReportState(str, Enum):
     """Enum representing the possible states of a report."""
 
-    SUBMITTED = 'Submitted'
-    CHECKING = 'Checking'
-    WRITING = 'Writing'
-    UPDATE_INFO = 'Update Info'
-    COMPLETED = 'Completed'
-    REJECTED = 'Rejected'
-
-    @classmethod
-    def get_default(cls) -> 'ReportState':
-        """Returns the default state (SUBMITTED)."""
-        return cls.SUBMITTED
+    SUBMITTED = 'submitted'
+    CHECKING = 'checking'
+    WRITING = 'writing'
+    UPDATE_INFO = 'update_info'
+    COMPLETED = 'completed'
+    REJECTED = 'rejected'
 
 
 class ArticleState(str, Enum):
@@ -71,3 +66,16 @@ class ArticleState(str, Enum):
     DRAFT = "Draft"
     PUBLISHED = "Published"
     ARCHIVED = "Archived"
+
+
+class ImageType(str, Enum):
+
+    ARTICLE = "article"
+    PROFILE = "profile"
+
+
+class ImageStatus(str, Enum):
+
+    CREATED = "created"
+    STORED = "stored"
+    PUBLISHED = "published"

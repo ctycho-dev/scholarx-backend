@@ -2,6 +2,7 @@ from fastapi import (
     HTTPException,
     status
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.user.repository import UserRepository
 from app.domain.profile.repository import ProfileRepository
 from app.domain.profile.schema import (
@@ -21,20 +22,21 @@ class ProfileService:
 
     def __init__(
         self,
+        db: AsyncSession,
         repo: ProfileRepository,
         user_repo: UserRepository,
         user: UserOut
     ):
-
+        self.db = db
         self.repo = repo
         self.user_repo = user_repo
         self.user = user
 
-    async def get_by_user_id(self, user_id: str) -> ProfileOut | None:
+    async def get_by_user_id(self, user_id: int) -> ProfileOut | None:
         """
         Get user
         """
-        profile = await self.repo.get_by_user_id(user_id)
+        profile = await self.repo.get_by_user_id(self.db, user_id)
         return profile
 
     async def create_profile(
@@ -44,9 +46,9 @@ class ProfileService:
     ) -> ProfileOut:
         """Create user."""
 
-        existing_profile = await self.repo.get_by_user_id(self.user.id)
+        existing_profile = await self.repo.get_by_user_id(self.db, self.user.id)
         if existing_profile:
-            await self.repo.delete_by_id(existing_profile.id)
+            await self.repo.delete_by_id(self.db, existing_profile.id)
 
         data.user_id = self.user.id
 
@@ -56,31 +58,33 @@ class ProfileService:
                 self.user.linked_accounts
             )
 
-        profile = await self.repo.create(data)
+        profile = await self.repo.create(self.db, data)
         if not profile:
             raise ValueError('Profile creation error.')
 
-        updated_user = await self.user_repo.update(
-            self.user.id,
-            {
-                "has_profile": True,
-                "account_type": profile.account_type
-            }
-        )
-        if not updated_user:
-            raise ValueError('User update failed.')
+        # updated_user = await self.user_repo.update(
+        #     self.db,
+        #     self.user.id,
+        #     {
+        #         "has_profile": True,
+        #         "account_type": profile.account_type
+        #     }
+        # )
+        # if not updated_user:
+        #     raise ValueError('User update failed.')
 
         return profile
 
     async def update(
         self,
-        user_id: str,
+        user_id: int,
         data: ProfileUpdate
     ) -> ProfileOut:
         """
         Delete a message by its ID.
         """
         updated = await self.repo.update(
+            self.db,
             user_id,
             data
         )
@@ -91,7 +95,7 @@ class ProfileService:
     ) -> ProfileOut | None:
         """Create user."""
         
-        profile = await self.repo.get_by_user_id(self.user.id)
+        profile = await self.repo.get_by_user_id(self.db, self.user.id)
         return profile
 
     def _populate_socials_from_linked_accounts(

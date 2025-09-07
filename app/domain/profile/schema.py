@@ -13,7 +13,7 @@ class ProfileCreate(BaseModel):
     """
     Create a Profile during onboarding (minimal required: account_type + username).
     """
-    user_id: str | None = None
+    user_id: int | None = None
     account_type: AccountType
     username: str | None = None
 
@@ -57,49 +57,49 @@ class ProfileUpdate(BaseModel):
     PATCH-style updates for Profile only.
     All fields optional. Arrays replace by default (idempotent PUT semantics).
     """
-    # public display
+
+    # --- Public Display ---
     account_type: AccountType | None = None
-    username: str | None = None
-    name: str | None = None
-    location: str | None = None
-    bio: str | None = None
+    username: str | None = Field(None, max_length=50, pattern=r"^[a-zA-Z0-9_.-]+$")
+    name: str | None = Field(None, max_length=100)
+    location: str | None = Field(None, max_length=100)
+    bio: str | None = Field(None, max_length=500)
     profile_image: str | None = None
 
-    # display roles (replace list)
-    display_role: str | None
+    display_role: str | None = Field(None, max_length=50)
 
-    # socials (replace list)
-    github: str | None
-    twitter: str | None
-    linkedin: str | None
-    instagram: str | None
-    discord: str | None
-    google_scholar: str | None
-    orcid: str | None
-    researchgate: str | None
-    website: str | None
-    cmc_cg: str | None
+    # --- Social Links ---
+    github: str | None = Field(None, max_length=100)
+    twitter: str | None = Field(None, max_length=100)
+    linkedin: str | None = Field(None, max_length=100)
+    instagram: str | None = Field(None, max_length=100)
+    discord: str | None = Field(None, max_length=50)
+    google_scholar: str | None = Field(None, max_length=100)
+    orcid: str | None = Field(None, max_length=50)
+    researchgate: str | None = Field(None, max_length=100)
+    website: str | None = Field(None, max_length=200)
+    cmc_cg: str | None = Field(None, max_length=100)
 
-    # publisher
-    organization_name: str | None = None
-    institution_name: str | None = None
+    # --- Publisher Info ---
+    organization_name: str | None = Field(None, max_length=100)
+    institution_name: str | None = Field(None, max_length=100)
     verification_status: bool | None = None
 
-    # project
-    organization_type: OrganizationType | None
-    mission: str | None
-    team_size: int | None
-    founded_year: int | None
+    # --- Project/Org Info ---
+    organization_type: OrganizationType | None = None
+    mission: str | None = Field(None, max_length=1000)
+    team_size: int | None = Field(None, ge=1, le=10000)
+    founded_year: int | None = Field(None, ge=1900, le=2100)
 
-    # personal
-    current_affiliation: str | None
-    interests: list[str]
+    # --- Personal Info ---
+    current_affiliation: str | None = Field(None, max_length=100)
+    interests: list[str] | None = Field(None, max_length=15)  # max 10 items
 
 
 class ProfileOut(BaseModel):
 
-    id: str
-    user_id: str
+    id: int
+    user_id: int
     account_type: AccountType
 
     # public display

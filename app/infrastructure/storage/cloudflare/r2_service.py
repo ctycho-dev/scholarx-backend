@@ -42,6 +42,22 @@ class CloudflareR2Service:
         except Exception as e:
             logger.error('Failed to connect to Cloudflare R2: %s', e)
             raise e
+    
+    def disconnect(self):
+        """
+        Close the underlying S3 client connections gracefully.
+        This releases HTTP connections and avoids resource leaks.
+        """
+        if self.s3_client is not None:
+            try:
+                self.s3_client.close()
+                logger.info("Cloudflare R2 client connection closed.")
+            except Exception as e:
+                logger.warning("Error closing R2 client: %s", e)
+            finally:
+                self.s3_client = None
+        else:
+            logger.debug("No R2 client to disconnect.")
 
     def _ensure_connection(self):
         if self.s3_client is None:

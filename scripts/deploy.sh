@@ -3,7 +3,7 @@
 git restore .
 git pull origin main
 
-docker build . -t athenax-backend
+docker build . -t scholarx-backend
 
 docker-compose down
 docker-compose up -d

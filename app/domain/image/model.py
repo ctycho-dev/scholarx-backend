@@ -1,48 +1,41 @@
-# model.py
-from typing import Literal
-from pydantic import Field
-from app.common.metadata_document import BaseDocument
+# app/domain/image/model.py
+from typing import Optional
+from sqlalchemy import String, Text, ForeignKey, Integer
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.database.connection import Base
+from app.common.audit_mixin import TimestampMixin, UserAuditMixin
+from app.enums.enums import ImageType, ImageStatus
 
 
-class Image(BaseDocument):
+class Image(Base, TimestampMixin, UserAuditMixin):
     """
     Tracks images uploaded by users.
     Used for cleanup of orphaned files in R2.
     """
+    
+    __tablename__ = "images"
 
-    # R2 object key (e.g. 'articles/171234567890-cover.jpg')
-    r2_key: str | None = None
-
-    # Public URL (e.g. https://scholarx-article.mypinx.store/articles/171234567890-cover.jpg)
-    public_url: str | None = None
-
-    uploaded_by: str = Field(..., description="User ID (from JWT or Privy)")
-
-    # Status: pending (not published) or published (used in article)
-    status: Literal['created', "stored", 'published'] = Field(
-        default="created",
-        description="Whether image is in draft or published article"
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
     )
-
-    # Optional: link to article if used
-    article_id: str | None = None
-
+    r2_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    public_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    type: Mapped[ImageType] = mapped_column(String(50), nullable=False)
+    status: Mapped[ImageStatus] = mapped_column(
+        String(50),
+        default=ImageStatus.CREATED,
+        nullable=False
+    )
     # Filename and MIME type (for debugging)
-    filename: str
-    content_type: str
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
 
-    class Settings:
-        name = "images"
-        indexes = ["status", "article_id", "created_at"]
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "r2_key": "articles/171234567890-cover.jpg",
-                "public_url": "https://scholarx-article.mypinx.store/articles/171234567890-cover.jpg",
-                "uploaded_by": "user_abc123",
-                "status": "pending",
-                "filename": "cover.jpg",
-                "content_type": "image/jpeg"
-            }
-        }
+    article_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("articles.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True
+    )
+    
+    def __repr__(self) -> str:
+        return f"<Image(id={self.id}, filename='{self.filename}', status='{self.status}')>"

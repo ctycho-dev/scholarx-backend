@@ -3,13 +3,15 @@ from fastapi import (
     Response, Request, status
 )
 from app.middleware.rate_limiter import limiter
-from app.domain.wishlist.repository import WishlistRepository
-from app.core.dependencies import get_wishlist_repo
-from app.domain.wishlist.schema import WishlistIn
+from app.domain.wishlist.service import WishlistService
+from app.core.dependencies import get_wishlist_service
+from app.domain.wishlist.schema import WishlistCreate
 from app.core.config import settings
 from app.enums.enums import AppMode
+from app.core.logger import get_logger
 
 
+logger = get_logger()
 router = APIRouter()
 
 
@@ -17,7 +19,7 @@ router = APIRouter()
 @limiter.limit("100/minute")
 async def get_wishlish(
     request: Request,
-    repo: WishlistRepository = Depends(get_wishlist_repo)
+    repo: WishlistService = Depends(get_wishlist_service)
 ):
     try:
         data = await repo.get_all()
@@ -30,8 +32,8 @@ async def get_wishlish(
 @limiter.limit("5/minute")
 async def create_wishlish(
     request: Request,
-    data: WishlistIn,
-    repo: WishlistRepository = Depends(get_wishlist_repo)
+    data: WishlistCreate,
+    repo: WishlistService = Depends(get_wishlist_service)
 ):
 
     if not data.email or "@" not in data.email:
@@ -40,7 +42,17 @@ async def create_wishlish(
     try:
         if settings.mode == AppMode.TEST:
             return Response(status_code=status.HTTP_200_OK)
-        await repo.create(data)
+        await repo.create_wishlist(data)
         return Response(status_code=200)
+    except ValueError as e:
+        logger.error('[create_user] ValueError: %s', e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException as e:
+        logger.error('[create_user] HTTPException: %s', e)
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error('[create_user] Exception: %s', e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while fetching user details"
+        ) from e

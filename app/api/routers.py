@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
     user,
-    email,
-    storj,
-    article,
+    # email,
+    # storj,
+    # article,
     wishlist,
     profile,
     image
@@ -12,23 +12,23 @@ from app.api.v1.endpoints.submit import audit, research
 
 api_router = APIRouter()
 
-api_router.include_router(
-    audit.router,
-    prefix="/audit",
-    tags=["Audit"]
-)
+# api_router.include_router(
+#     audit.router,
+#     prefix="/audit",
+#     tags=["Audit"]
+# )
 
-api_router.include_router(
-    research.router,
-    prefix="/research",
-    tags=["Research"]
-)
+# api_router.include_router(
+#     research.router,
+#     prefix="/research",
+#     tags=["Research"]
+# )
 
-api_router.include_router(
-    article.router,
-    prefix="/article",
-    tags=["Article"]
-)
+# api_router.include_router(
+#     article.router,
+#     prefix="/article",
+#     tags=["Article"]
+# )
 
 api_router.include_router(
     user.router,
@@ -42,17 +42,17 @@ api_router.include_router(
     tags=["Profiles"]
 )
 
-api_router.include_router(
-    email.router,
-    prefix="/email",
-    tags=["Email"]
-)
+# api_router.include_router(
+#     email.router,
+#     prefix="/email",
+#     tags=["Email"]
+# )
 
-api_router.include_router(
-    storj.router,
-    prefix="/s3",
-    tags=["Data storage"]
-)
+# api_router.include_router(
+#     storj.router,
+#     prefix="/s3",
+#     tags=["Data storage"]
+# )
 
 api_router.include_router(
     image.router,

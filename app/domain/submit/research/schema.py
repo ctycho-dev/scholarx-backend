@@ -121,28 +121,13 @@ class ResearchSteps(BaseModel):
     step10: Step10
 
 
-class Comment(BaseModel):
-    """"""
-    id: UUID = Field(
-        default_factory=uuid4,
-        description="Unique identifier."
-    )
-    role: UserRole = UserRole.USER
-    content: str
-    created_at: datetime = Field(
-        default_factory=datetime.now,
-        description="Timestamp when the record was created"
-    )
-
-
 class ResearchOut(BaseModel):
     """All steps."""
 
-    id: str
+    id: int
     steps: ResearchSteps
     state: ReportState
-    comments: list[Comment] | None
-    user_privy_id: str
+    user_id: int
     created_at: datetime
     updated_at: datetime
 

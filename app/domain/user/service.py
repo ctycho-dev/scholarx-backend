@@ -2,7 +2,9 @@ from fastapi import (
     HTTPException,
     status
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.user.repository import UserRepository
+from app.domain.profile.repository import ProfileRepository
 from app.domain.user.schema import (
     UserCreate,
     UserOut,
@@ -15,15 +17,21 @@ from app.utils.serialize import serialize
 class UserService:
     """User Service layer."""
 
-    def __init__(self, repo: UserRepository):
-
+    def __init__(
+        self,
+        db: AsyncSession,
+        repo: UserRepository,
+        profile_repo: ProfileRepository
+    ):
+        self.db = db
         self.repo = repo
+        self.profile_repo = profile_repo
 
     async def get_user_by_privy_id(self, privy_id: str) -> UserOut:
         """
         Get user
         """
-        user = await self.repo.get_by_privy_id(privy_id)
+        user = await self.repo.get_by_privy_id(self.db, privy_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -35,7 +43,7 @@ class UserService:
     async def create_user(
         self,
         data: UserCreate,
-        # current_user: UserOut
+        # current_user_id: int,
     ) -> UserOut:
         """Create user."""
         # Set email if not set but found in linked accounts
@@ -65,81 +73,30 @@ class UserService:
         if has_bd_account and data.role == UserRole.USER:
             data.role = UserRole.BD
 
-        new_user = await self.repo.create(data)
+        new_user = await self.repo.create(
+            self.db, data,
+        )
         if not new_user:
             raise ValueError('User creation error.')
         return new_user
     
-    # github_oauth
-    
     async def update(
         self,
-        user_id: str,
+        current_user_id: int,
         data: UserUpdate
     ) -> UserOut:
         """
         Delete a message by its ID.
         """
         updated = await self.repo.update(
-            user_id,
-            data
+            self.db,
+            current_user_id,
+            data,
+            current_user_id=current_user_id
         )
         return updated
 
-    # async def delete_user(
-    #     self,
-    #     user_id_to_delete: str,
-    #     current_user: UserOut
-    # ) -> None:
-    #     """
-    #     Delete user.
+    async def has_profile(self, user_id: int) -> bool:
+        profile = await self.profile_repo.user_has_profile(self.db, user_id)
 
-    #     Rules:
-    #         1. Users cannot delete themselves
-    #         2. Superadmins can delete anyone
-    #         3. Admins can only delete users from their own company
-    #         4. Regular users cannot delete anyone
-
-    #     Args:
-    #         user_id_to_delete (int): The ID of the user to delete.
-    #         current_user (UserOut): The currently authenticated user (from dependency).
-
-    #     Raises:
-    #         HTTPException: 
-    #             - 403 Forbidden if user doesn't have permission
-    #             - 404 Not Found if user doesn't exist
-    #             - 500 Internal Server Error for unexpected errors
-    #     """
-    #     try:
-    #         # Check permissions
-    #         if user_id_to_delete == current_user.id:
-    #             raise HTTPException(
-    #                 status_code=status.HTTP_403_FORBIDDEN,
-    #                 detail="Cannot delete yourself"
-    #             )
-
-    #         # Get the user to delete
-    #         user = await self.repo.get_by_id(str(user_id_to_delete))
-    #         if not user:
-    #             raise HTTPException(
-    #                 status_code=status.HTTP_404_NOT_FOUND,
-    #                 detail="User not found"
-    #             )
-
-    #         if not (current_user.role == Role.SUPERADMIN or
-    #                 (current_user.role == Role.ADMIN and user.company_id == current_user.company_id)):
-    #             raise HTTPException(
-    #                 status_code=status.HTTP_403_FORBIDDEN,
-    #                 detail="Insufficient permissions to delete this user"
-    #             )
-
-    #         # ws_repo = get_ws_repo()
-
-    #         # # Delete related Workspaces
-    #         # workspaces = await ws_repo.get_by_user(user_id_to_delete)
-    #         # for ws in workspaces:
-    #         #     await ws_repo.delete_by_id(ws.id)
-
-    #         await self.repo.delete_by_id(user_id_to_delete)
-    #     except Exception as e:
-    #         raise e
+        return profile if profile is not None else False

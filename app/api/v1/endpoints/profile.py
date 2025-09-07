@@ -67,7 +67,7 @@ async def create_profile(
 @limiter.limit("15/minute")
 async def update_profile(
     request: Request,
-    profile_id: str,
+    profile_id: int,
     data: ProfileUpdate,
     _: User = Depends(get_current_user),
     service: ProfileService = Depends(get_profile_service)
@@ -129,7 +129,8 @@ async def get_my_profile(
             - 500 if there's an unexpected database error
     """
     try:
-        return await service.get_profile_by_user()
+        user = await service.get_profile_by_user()
+        return user
     except ValueError as e:
         logger.error('[get_profile_by_user] ValueError: %s', e)
         raise HTTPException(status_code=400, detail=str(e)) from e

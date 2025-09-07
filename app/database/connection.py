@@ -1,55 +1,71 @@
-from beanie import init_beanie
-from motor.motor_asyncio import AsyncIOMotorClient
+# app/database/connection.py
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.config import settings
-from app.domain.wishlist.model import WishlistCollection
-from app.domain.submit.audit.model import AuditSubmit
-from app.domain.submit.research.model import ResearchSubmit
-from app.domain.article.model import Article
-from app.domain.image.model import Image
-from app.domain.user.model import User
-from app.domain.profile.model import Profile
+import logging
+
+# Set up logging
+logging.basicConfig()
+logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+
+# Base for models
+Base = declarative_base()
 
 
 class DatabaseManager:
-
     def __init__(self):
-        self.client = None
+        self.engine: AsyncEngine | None = None
+        self.async_session: sessionmaker | None = None
 
-    async def connect(self):
+    def init_engine(self):
         """
-        Initialize the database connection and Beanie.
+        Initialize the async engine.
         """
-        self.client = AsyncIOMotorClient(
-            host=settings.MONGO_HOST,
-            port=settings.MONGO_PORT,
-            username=settings.MONGO_INITDB_ROOT_USERNAME,
-            password=settings.MONGO_INITDB_ROOT_PASSWORD,
-        )
-        await init_beanie(
-            database=self.client.get_database(settings.MONGO_INITDB_DATABASE),
-            document_models=[
-                WishlistCollection,
-                AuditSubmit,
-                ResearchSubmit,
-                User,
-                Article,
-                Profile,
-                Image
-            ],
+        DATABASE_URL = settings.DATABASE_URL
+        if not DATABASE_URL:
+            raise ValueError("DATABASE_URL is not set")
+
+        self.engine = create_async_engine(
+            DATABASE_URL,
+            echo=False,  # Set to True for SQL logging
+            pool_size=20,
+            pool_pre_ping=True,
+            connect_args={"server_settings": {"application_name": "scholarx-backend"}}
         )
 
-    async def disconnect(self):
-        """
-        Close the database connection.
-        """
-        if self.client:
-            self.client.close()
+        self.async_session = sessionmaker(
+            bind=self.engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autoflush=False,
+            autocommit=False
+        )
 
-    def get_client(self):
+    async def create_all_tables(self):
         """
-        Get client.
+        Create all tables (use only for testing or first run).
+        In production, use Alembic migrations instead.
         """
-        return self.client
+        if not self.engine:
+            raise RuntimeError("Engine not initialized. Call init_engine() first.")
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    def get_session(self) -> AsyncSession:
+        """
+        Get a new async session.
+        Usage: async with db_manager.get_session() as session:
+        """
+        if not self.async_session:
+            raise RuntimeError("Session not initialized. Call init_engine() first.")
+        return self.async_session()
+
+    async def close(self):
+        """
+        Dispose the engine.
+        """
+        if self.engine:
+            await self.engine.dispose()
 
 
 db_manager = DatabaseManager()

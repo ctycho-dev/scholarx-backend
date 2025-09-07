@@ -7,19 +7,16 @@ from fastapi import (
 )
 from app.middleware.rate_limiter import limiter
 from app.core.dependencies import (
-    get_current_user,
-    get_current_user_out
+    get_current_user
 )
 from app.domain.user.schema import (
     UserCreate,
     UserOut,
     UserUpdate
 )
-from app.domain.user.model import User
 from app.core.logger import get_logger
 from app.core.dependencies import get_user_service
 from app.domain.user.service import UserService
-from app.utils.serialize import serialize
 
 logger = get_logger()
 
@@ -30,14 +27,18 @@ router = APIRouter()
 @limiter.limit("30/minute")
 async def get_user(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: UserOut = Depends(get_current_user),
+    service: UserService = Depends(get_user_service)
 ) -> UserOut:
     """
     Get user details for the currently authenticated user.
     """
     try:
-        user_dict = serialize(current_user.model_dump())
-        return UserOut(**user_dict)
+        has_profile = await service.has_profile(current_user.id)
+
+        current_user.has_profile = has_profile
+
+        return current_user
     except ValueError as e:
         logger.error('[get_user] ValueError: %s', e)
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -97,7 +98,7 @@ async def create_user(
 async def update_user(
     request: Request,
     data: UserUpdate,
-    current_user: UserOut = Depends(get_current_user_out),
+    current_user: UserOut = Depends(get_current_user),
     service: UserService = Depends(get_user_service)
 ):
     """
@@ -118,6 +119,9 @@ async def update_user(
     """
     try:
         updated_user = await service.update(current_user.id, data)
+        has_profile = await service.has_profile(current_user.id)
+
+        updated_user.has_profile = has_profile
         return updated_user
     except ValueError as e:
         logger.error('[update_user] ValueError: %s', e)
@@ -131,73 +135,3 @@ async def update_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while updating user details"
         ) from e
-
-
-# from fastapi.security import OAuth2PasswordRequestForm
-# from datetime import timedelta
-
-# @router.post("/login/password")
-# async def login_with_password(
-#     form_data: OAuth2PasswordRequestForm = Depends(),
-#     db_repo: UserRepository = Depends(get_user_repo)
-# ) -> dict:
-#     """
-#     Authenticate with email/password
-    
-#     Args:
-#         form_data: Standard OAuth2 form with username=email
-#         db_repo: User repository
-        
-#     Returns:
-#         dict: Access token and user info
-        
-#     Raises:
-#         HTTPException: 401 for invalid credentials
-#     """
-#     try:
-#         # 1. Find user by email
-#         user = await db_repo.get_by_email(form_data.username)
-#         if not user:
-#             raise HTTPException(
-#                 status_code=status.HTTP_401_UNAUTHORIZED,
-#                 detail="Invalid credentials"
-#             )
-
-#         # 2. Verify password
-#         if not user.verify_password(form_data.password):
-#             raise HTTPException(
-#                 status_code=status.HTTP_401_UNAUTHORIZED,
-#                 detail="Invalid credentials"
-#             )
-
-#         # 3. Check email verification
-#         if not user.email_verified:
-#             raise HTTPException(
-#                 status_code=status.HTTP_403_FORBIDDEN,
-#                 detail="Email not verified"
-#             )
-
-#         # 4. Update login stats
-#         user.last_login_at = datetime.now()
-#         user.login_count += 1
-#         await user.save()
-
-#         # 5. Generate token
-#         access_token = create_access_token(
-#             data={"sub": user.email},
-#             expires_delta=timedelta(minutes=30)
-            
-#         return {
-#             "access_token": access_token,
-#             "token_type": "bearer",
-#             "user": UserOut.from_orm(user)
-#         }
-        
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         logger.error("Login error: %s", e)
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail="Login failed"
-#         )

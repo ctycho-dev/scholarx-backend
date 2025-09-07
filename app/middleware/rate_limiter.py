@@ -26,7 +26,14 @@ limiter = Limiter(
 
 
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
-    raise HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail="Rate limit exceeded. Please try again later.",
-    )
+    if isinstance(exc, RateLimitExceeded):
+        detail = getattr(exc, 'detail', "Rate limit exceeded. Please try again later.")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=detail,
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, # More appropriate for backend issues like Redis
+            detail="Service temporarily unavailable due to rate limiting backend error.",
+        )

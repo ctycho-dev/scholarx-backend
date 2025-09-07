@@ -1,5 +1,12 @@
 version: "3.8"
 
+x-healthcheck-backend: &backendhealthcheck
+  healthcheck:
+    test: ["CMD", "sh", "-c", "echo 'Checking backend health via /health' && curl -f http://localhost:8000/health || exit 1"]
+    interval: 30s
+    timeout: 10s
+    retries: 5
+
 x-healthcheck-mongodb-template: &mongodbhealthcheck
   healthcheck:
     test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
@@ -15,6 +22,22 @@ x-healthcheck-redis-template: &redishealthcheck
     retries: 3
 
 services:
+  web:
+    image: scholarx-backend
+    build: .
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - athenax_network
+    <<: *backendhealthcheck
   mongodb:
     image: mongo:7.0.14
     container_name: mongodb
@@ -73,7 +96,7 @@ services:
     user: root
     volumes:
       - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - /Users/ilnurgumerov/development/onekey/athenax-backend:/logs:ro
+      - /Users/ilnurgumerov/development/onekey/scholarx-backend:/logs:ro
     depends_on:
       - elasticsearch
     networks:

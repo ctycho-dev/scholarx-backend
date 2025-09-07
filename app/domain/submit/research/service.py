@@ -1,151 +1,113 @@
+# app/domain/submit/research/service.py
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List, Optional
+
+from app.domain.submit.research.repository import ResearchRepository
 from app.domain.submit.research.schema import (
     ResearchSubmitSchema,
-    Comment
+    ResearchOut,
+    ResearchSteps
 )
-from app.domain.user.model import User
-from app.domain.submit.research.repository import ResearchRepository
-from app.exceptions import NotFoundError
+from app.domain.user.schema import UserOut
 from app.enums.enums import ReportState
+from app.exceptions import NotFoundError
 
 
 class ResearchService:
-    def __init__(self, repo: ResearchRepository, user: User):
+    """Research Service layer for SQLAlchemy."""
+
+    def __init__(
+        self,
+        db: AsyncSession,
+        repo: ResearchRepository,
+        user: UserOut
+    ):
+        self.db = db
         self.repo = repo
         self.user = user
 
-    async def get_all(self):
+    async def get_all(self) -> List[ResearchOut]:
         """
         Retrieve all research records from the database.
-
-        Returns:
-            list[ResearchOut]: List of all research entries.
         """
-        return await self.repo.get_all()
+        return await self.repo.get_all(self.db)
 
-    async def get_by_user(self):
+    async def get_by_user(self) -> List[ResearchOut]:
         """
         Retrieve research records submitted by the currently authenticated user.
-
-        Raises:
-            ValueError: If user context is not provided.
-
-        Returns:
-            list[ResearchOut]: List of research records by the user.
         """
         if not self.user:
             raise ValueError("User context required")
-        return await self.repo.get_by_user(self.user.privy_id)
+        return await self.repo.get_by_user(self.db, self.user.id)
 
-    async def get_by_state(self, state: str):
+    async def get_by_state(self, state: ReportState) -> List[ResearchOut]:
         """
         Retrieve research records filtered by a specific report state.
-
-        Args:
-            state (str): The desired report state.
-
-        Returns:
-            list[ResearchOut]: List of research entries in the specified state.
         """
-        return await self.repo.get_by_state(state)
+        return await self.repo.get_by_state(self.db, state)
 
-    async def get_by_id(self, research_id: str):
+    async def get_by_id(self, research_id: int) -> ResearchOut:
         """
         Retrieve a specific research record by its ID.
-
-        Args:
-            research_id (str): UUID of the research record.
-
-        Raises:
-            NotFoundError: If the research record is not found.
-
-        Returns:
-            ResearchOut: The requested research record.
         """
-        research = await self.repo.get_by_id(research_id)
+        research = await self.repo.get_by_id(self.db, research_id)
         if not research:
             raise NotFoundError("Research not found")
         return research
 
-    async def create(self, data: ResearchSubmitSchema):
+    async def create(self, data: ResearchSubmitSchema) -> ResearchOut:
         """
         Create a new research record.
-
-        Args:
-            data (ResearchSubmitSchema): Payload for the new research.
-
-        Raises:
-            ValueError: If user context is missing.
         """
         if not self.user:
             raise ValueError("User context required")
-        data.user_privy_id = self.user.privy_id
-        await self.repo.create(entity=data, current_user=self.user)
+        
+        # Set user_id and created_by for audit trail
+        data.user_id = self.user.id
+        
+        research = await self.repo.create(self.db, data)
+        if not research:
+            raise ValueError('Research creation error.')
+        
+        return research
 
-    async def update(self, research_id: str, data: ResearchSubmitSchema):
+    async def update(
+        self, 
+        research_id: int, 
+        data: ResearchSubmitSchema
+    ) -> ResearchOut:
         """
         Update an existing research record.
-
-        Args:
-            research_id (str): UUID of the research to update.
-            data (ResearchSubmitSchema): Updated data.
-
-        Raises:
-            NotFoundError: If the research is not found.
-            PermissionError: If the current user is not authorized.
         """
-        research = await self.repo.get_by_id(research_id)
-        if not research:
+        # Check if research exists and user owns it
+        existing_research = await self.repo.get_by_id(self.db, research_id)
+        if not existing_research:
             raise NotFoundError("Research not found")
-        if research.user_privy_id != self.user.privy_id:
-            raise PermissionError("Not authorized to update this research")
-        await self.repo.update(research_id, data)
+        
+        if existing_research.user_id != self.user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this research"
+            )
 
-    async def update_state(self, research_id: str, data: ReportState):
+        updated = await self.repo.update(self.db, research_id, data)
+        return updated
+
+    async def update_state(
+        self, 
+        research_id: int, 
+        state: ReportState
+    ) -> ResearchOut:
         """
         Update the state of an existing research record.
-
-        Args:
-            research_id (str): UUID of the research to update.
-            data (ReportState): New report state.
-
-        Raises:
-            NotFoundError: If the research is not found.
-
-        Returns:
-            ResearchOut: The research record with the updated state.
         """
         research = await self.repo.update_state(
+            self.db,
             research_id,
-            state=data,
-            current_user=self.user
+            state=state,
+            updated_by=self.user.id
         )
         if not research:
             raise NotFoundError("Research not found")
         return research
-
-    async def add_comment(self, research_id: str, data: str):
-        """
-        Add a comment to a research record.
-
-        Args:
-            research_id (str): UUID of the research to update.
-            data (str): Comment content to add.
-
-        Raises:
-            NotFoundError: If the research is not found.
-
-        Returns:
-            Comment: The comment that was added.
-        """
-        comment = Comment(
-            role=self.user.role,
-            content=data
-        )
-        research = await self.repo.add_comment(
-            research_id,
-            comment=comment,
-            current_user=self.user
-        )
-        if not research:
-            raise NotFoundError("Research not found")
-        return comment

@@ -1,55 +1,67 @@
-from beanie import Document, Indexed, PydanticObjectId
-from pydantic import Field
+# app/domain/profile/model.py
+from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime
-from typing import Optional
-from app.domain.profile.schema import AccountType, OrganizationType
+from typing import List, TYPE_CHECKING
+from app.database.connection import Base
+from app.common.audit_mixin import FullAuditMixin
+from app.domain.user.model import User
 
 
-class Profile(Document):
-    """
-    Public profile + type-specific details used in onboarding, profile page, and article bylines.
-    """
-    user_id: Indexed(PydanticObjectId, unique=True)  
+class Profile(Base, FullAuditMixin):
+    __tablename__ = "profiles"
 
-    # --- Core public fields you listed ---
-    name: Optional[str] = Field(None, description="Full name for profile display")
-    username: Indexed(str, unique=True) | None = None
-    location: str | None = None
-    bio: Optional[str] = None
-    profile_image: str | None = None
-    display_role: str | None = None
-    account_type: AccountType
-    
-    # --- Socials ---
-    github: str | None
-    twitter: str | None
-    linkedin: str | None
-    instagram: str | None
-    discord: str | None
-    google_scholar: str | None
-    orcid: str | None
-    researchgate: str | None
-    website: str | None
-    cmc_cg: str | None
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True
+    )
 
-    # --- Publisher ---
-    organization_name: str | None
-    institution_name: str | None
-    verification_status: bool = False
+    # Core fields
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    username: Mapped[str | None] = mapped_column(
+        String, unique=True, index=True, nullable=True
+    )
+    location: Mapped[str | None] = mapped_column(String, nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_image: Mapped[str | None] = mapped_column(String, nullable=True)
+    display_role: Mapped[str | None] = mapped_column(String, nullable=True)
+    account_type: Mapped[str] = mapped_column(String, nullable=False)
 
-    # --- Project ---
-    organization_type: OrganizationType | None
-    mission: str | None
-    team_size: int | None
-    founded_year: int | None
+    # Socials
+    github: Mapped[str | None] = mapped_column(String, nullable=True)
+    twitter: Mapped[str | None] = mapped_column(String, nullable=True)
+    linkedin: Mapped[str | None] = mapped_column(String, nullable=True)
+    instagram: Mapped[str | None] = mapped_column(String, nullable=True)
+    discord: Mapped[str | None] = mapped_column(String, nullable=True)
+    google_scholar: Mapped[str | None] = mapped_column(String, nullable=True)
+    orcid: Mapped[str | None] = mapped_column(String, nullable=True)
+    researchgate: Mapped[str | None] = mapped_column(String, nullable=True)
+    website: Mapped[str | None] = mapped_column(String, nullable=True)
+    cmc_cg: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # --- Personal ---
-    current_affiliation: str | None
-    interests: list[str] = Field(default_factory=list)
+    # Publisher
+    organization_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    institution_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    verification_status: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    # Project
+    organization_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    mission: Mapped[str | None] = mapped_column(Text, nullable=True)
+    team_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    founded_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    class Settings:
-        name = "profile"
-        indexes = ["user_id", "username", "account_type"]
+    # Personal
+    current_affiliation: Mapped[str | None] = mapped_column(String, nullable=True)
+    interests: Mapped[List[str]] = mapped_column(
+        ARRAY(String), default=list, nullable=False
+    )
+
+    # Relationship back to User
+    # user: Mapped["User"] = relationship("User", back_populates="profile")

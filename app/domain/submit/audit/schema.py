@@ -1,7 +1,3 @@
-from uuid import (
-    uuid4,
-    UUID
-)
 from datetime import datetime
 from pydantic import (
     BaseModel,
@@ -82,28 +78,13 @@ class AuditSteps(BaseModel):
     step4: Step4
 
 
-class Comment(BaseModel):
-    """"""
-    id: UUID = Field(
-        default_factory=uuid4,
-        description="Unique identifier."
-    )
-    role: UserRole = UserRole.USER
-    content: str
-    created_at: datetime = Field(
-        default_factory=datetime.now,
-        description="Timestamp when the record was created"
-    )
-
-
 class AuditOut(BaseModel):
     """All steps."""
 
-    id: str
+    id: int
     steps: AuditSteps
     state: ReportState
-    comments: list[Comment] | None
-    user_privy_id: str
+    user_id: int
     created_at: datetime
     updated_at: datetime
 
@@ -118,14 +99,6 @@ class AuditOut(BaseModel):
         return updated_at.isoformat()
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# class AuditUpdate(BaseModel):
-#     """All steps."""
-
-#     id: str
-#     steps: AuditSteps
-#     user_privy_id: str
 
 
 class AuditSubmitSchema(BaseModel):

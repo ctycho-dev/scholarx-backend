@@ -1,52 +1,53 @@
-from beanie import PydanticObjectId
+# app/domain/profile/repository.py
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import exists
+
 from app.common.base_repository import BaseRepository
 from app.domain.profile.model import Profile
 from app.domain.profile.schema import ProfileCreate, ProfileOut
 from app.exceptions import DatabaseError
 
 
-class ProfileRepository(
-    BaseRepository[Profile, ProfileOut, ProfileCreate]
-):
+class ProfileRepository(BaseRepository[Profile, ProfileOut, ProfileCreate]):
     """
-    MongoDB repository implementation for managing users.
-
-    This class extends the BaseRepository and implements the BaseRepository interface for the UserCollection,
-    providing CRUD operations and additional methods specific to users.
+    Postgres repository for Profile using SQLAlchemy (async).
+    Extends BaseRepository to inherit CRUD, and adds get_by_user_id.
     """
 
     def __init__(self):
-        """
-        Initializes the UserRepository with the UserCollection and ProfileOut schema.
-        """
         super().__init__(Profile, ProfileOut, ProfileCreate)
 
     async def get_by_user_id(
-        self, 
-        user_id: str,
+        self,
+        db: AsyncSession,
+        user_id: int,
     ) -> ProfileOut | None:
         """
-        Retrieves all files associated with a specific company ID.
-
-        Args:
-            user_id (str): The ID of the company to filter files by
-
-        Returns:
-            list[FileOut]: List of file output schemas for the matching files
-
-        Raises:
-            DatabaseError: If there's an error during database operation
+        Fetch the profile for a given user_id.
         """
         try:
-            query = self.collection.find(
-                {'user_id': PydanticObjectId(user_id)}
+            result = await db.execute(
+                select(Profile).where(Profile.user_id == user_id)
             )
-            
-            entity = await query.to_list()
-            if not entity:
+            profile = result.scalar_one_or_none()
+            if not profile:
                 return None
-
-            serialized_entity = self._serialize(entity[0].model_dump())
-            return ProfileOut(**serialized_entity)
+            # Pydantic v2: validate directly from ORM object
+            return ProfileOut.model_validate(profile)
         except Exception as e:
             raise DatabaseError(f"Failed to fetch profile for user {user_id}: {str(e)}") from e
+
+    async def user_has_profile(
+        self, db: AsyncSession, user_id: int
+    ) -> bool | None:
+        """
+        Check if user has a profile using EXISTS query.
+        Returns True if profile exists, False otherwise.
+        """
+        try:
+            query = select(exists().where(Profile.user_id == user_id))
+            result = await db.execute(query)
+            return result.scalar()
+        except Exception as e:
+            raise DatabaseError(f"Failed to check if user has profile: {str(e)}") from e

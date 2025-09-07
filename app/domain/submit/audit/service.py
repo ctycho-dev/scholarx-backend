@@ -1,12 +1,16 @@
-# services/submit/audit.py
+# app/domain/submit/audit/service.py
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List, Optional
+
+from app.domain.submit.audit.repository import AuditRepository
 from app.domain.submit.audit.schema import (
     AuditSubmitSchema,
-    Comment
+    AuditOut
 )
-from app.domain.user.model import User
-from app.domain.submit.audit.repository import AuditRepository
-from app.exceptions import NotFoundError
+from app.domain.user.schema import UserOut
 from app.enums.enums import ReportState
+from app.exceptions import NotFoundError
 
 
 class AuditService:
@@ -14,159 +18,100 @@ class AuditService:
     Service layer for handling business logic related to audit operations.
     """
 
-    def __init__(self, repo: AuditRepository, user: User):
-        """
-        Initialize the AuditService with a repository and a user context.
-        
-        Args:
-            repo (AuditRepository): Repository for audit DB operations.
-            user (User): Currently authenticated user.
-        """
+    def __init__(
+        self,
+        db: AsyncSession,
+        repo: AuditRepository,
+        user: UserOut
+    ):
+        self.db = db
         self.repo = repo
         self.user = user
 
-    async def get_all(self):
+    async def get_all(self) -> List[AuditOut]:
         """
         Retrieve all audit records from the database.
-
-        Returns:
-            list[AuditOut]: List of all audit entries.
         """
-        return await self.repo.get_all()
+        return await self.repo.get_all(self.db)
 
-    async def get_by_user(self):
+    async def get_by_user(self) -> List[AuditOut]:
         """
         Retrieve audit records submitted by the currently authenticated user.
-
-        Raises:
-            ValueError: If user context is not provided.
-
-        Returns:
-            list[AuditOut]: List of audits created by the current user.
         """
         if not self.user:
             raise ValueError("User context required")
-        return await self.repo.get_by_user(self.user.privy_id)
+        return await self.repo.get_by_user(self.db, self.user.id)
 
-    async def get_by_state(self, state: str):
+    async def get_by_state(self, state: ReportState) -> List[AuditOut]:
         """
         Retrieve audits filtered by a specific report state.
-
-        Args:
-            state (str): The desired report state.
-
-        Returns:
-            list[AuditOut]: List of audits in the specified state.
         """
-        return await self.repo.get_by_state(state)
+        return await self.repo.get_by_state(self.db, state)
 
-    async def get_by_id(self, audit_id: str):
+    async def get_by_id(self, audit_id: int) -> AuditOut:
         """
         Retrieve a single audit by its unique ID.
-
-        Args:
-            audit_id (str): The audit's UUID.
-
-        Raises:
-            NotFoundError: If the audit is not found.
-
-        Returns:
-            AuditOut: The corresponding audit entry.
         """
-        audit = await self.repo.get_by_id(audit_id)
+        audit = await self.repo.get_by_id(self.db, audit_id)
         if not audit:
             raise NotFoundError(f"Audit with ID {audit_id} not found")
         return audit
 
-    async def create(self, data: AuditSubmitSchema):
+    async def create(self, data: AuditSubmitSchema) -> AuditOut:
         """
         Create a new audit entry for the current user.
-
-        Args:
-            data (AuditSubmitSchema): Payload for the new audit.
-
-        Raises:
-            ValueError: If user context is not available.
-
-        Returns:
-            AuditOut: The newly created audit entry.
         """
         if not self.user:
             raise ValueError("User context required")
-        data.user_privy_id = self.user.privy_id
-        return await self.repo.create(entity=data, current_user=self.user)
+        
+        # Set user_id and created_by for audit trail
+        data.user_id = self.user.id
+        
+        audit = await self.repo.create(self.db, data)
+        if not audit:
+            raise ValueError('Audit creation error.')
+        
+        return audit
 
-    async def update(self, audit_id: str, data: AuditSubmitSchema):
+    async def update(
+        self, 
+        audit_id: int, 
+        data: AuditSubmitSchema
+    ) -> AuditOut:
         """
         Update an existing audit if the current user is the owner.
-
-        Args:
-            audit_id (str): UUID of the audit to update.
-            data (AuditSubmitSchema): Updated audit data.
-
-        Raises:
-            NotFoundError: If the audit is not found.
-            PermissionError: If the user is not authorized to modify the audit.
-
-        Returns:
-            AuditOut: The updated audit record.
         """
-        audit = await self.repo.get_by_id(audit_id)
-        if not audit:
+        # Check if audit exists and user owns it
+        existing_audit = await self.repo.get_by_id(self.db, audit_id)
+        if not existing_audit:
             raise NotFoundError("Audit not found")
-        if audit.user_privy_id != self.user.privy_id:
-            raise PermissionError("Not authorized to update this audit")
+        
+        if existing_audit.user_id != self.user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this audit"
+            )
 
+        # Set state to CHECKING when updated by user
         data.state = ReportState.CHECKING
-        return await self.repo.update(audit_id, data, current_user=self.user)
+        
+        updated = await self.repo.update(self.db, audit_id, data)
+        return updated
 
-    async def update_state(self, audit_id: str, data: ReportState):
+    async def update_state(
+        self, 
+        audit_id: int, 
+        state: ReportState
+    ) -> AuditOut:
         """
         Update the state of an existing audit.
-
-        Args:
-            audit_id (str): UUID of the audit to update.
-            data (ReportState): New report state.
-
-        Raises:
-            NotFoundError: If the audit is not found.
-
-        Returns:
-            AuditOut: The audit with the updated state.
         """
         audit = await self.repo.update_state(
+            self.db,
             audit_id,
-            state=data,
-            current_user=self.user
+            state=state,
+            updated_by=self.user.id
         )
         if not audit:
             raise NotFoundError("Audit not found")
         return audit
-
-    async def add_comment(self, audit_id: str, data: str):
-        """
-        Add a comment to an audit. Also updates the audit's state if the user's role is BD.
-
-        Args:
-            audit_id (str): UUID of the audit to update.
-            data (str): Comment content to add.
-
-        Raises:
-            NotFoundError: If the audit is not found.
-
-        Returns:
-            Comment: The comment that was added.
-        """
-        comment = Comment(
-            role=self.user.role,
-            content=data
-        )
-        audit = await self.repo.add_comment(
-            audit_id,
-            comment=comment,
-            current_user=self.user
-        )
-        if not audit:
-            raise NotFoundError("Audit not found")
-        return comment
-

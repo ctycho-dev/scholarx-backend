@@ -36,7 +36,6 @@ ENV/
 .env.production
 .env.test
 *.env.local
-*.env.*
 
 # === IDE & Editors ===
 # VS Code

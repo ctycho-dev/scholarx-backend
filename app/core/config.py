@@ -3,16 +3,16 @@ import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def get_env_file():
-    mode = os.getenv('mode', 'prod')
-    return f'.env.{mode}' if mode in ['dev', 'test'] else '.env'
+# def get_env_file():
+#     mode = os.getenv('mode', 'prod')
+#     return f'.env.{mode}' if mode in ['dev', 'test'] else '.env'
 
 
 class Settings(BaseSettings):
     """Application settings."""
 
     model_config = SettingsConfigDict(
-        env_file=['.env', get_env_file()],
+        env_file=['.env'],
         env_file_encoding='utf-8',
         extra="allow",
         case_sensitive=False,
@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     MONGO_INITDB_ROOT_PASSWORD: str
     MONGO_INITDB_DATABASE: str
 
+    # Postgres
+    DATABASE_URL: str
+
     # Cloudflare R2
     R2_ACCESS_KEY: str
     R2_SECRET_KEY: str
@@ -50,13 +53,6 @@ class Settings(BaseSettings):
     redis_host: str
     redis_port: int
 
-    # Database
-    # db_hostname: str
-    # db_port: int
-    # db_name: str
-    # db_username: str
-    # db_password: str
-
     # Email
     email_from: str
     email_pwd: str
@@ -67,6 +63,12 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
+
+    @property
+    def SYNC_DATABASE_URL(self) -> str:
+        """Convert async URL to sync URL for Alembic"""
+        # Convert postgresql+asyncpg://... to postgresql://...
+        return self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 
 
 settings = Settings()

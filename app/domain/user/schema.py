@@ -105,7 +105,7 @@ class UserOut(BaseModel):
         email (EmailStr): The user's email address.
         created_at (datetime): The timestamp when the user was created.
     """
-    id: str
+    id: int
     privy_id: str | None
     email: EmailStr | None
 
@@ -114,7 +114,7 @@ class UserOut(BaseModel):
     # metadata: dict | None
 
     account_type: str | None
-    has_profile: bool
+    has_profile: bool = False
 
     role: UserRole
     has_accepted_terms: bool

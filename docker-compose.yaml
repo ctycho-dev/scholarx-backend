@@ -1,11 +1,11 @@
 version: "3.8"
 
-x-healthcheck-mongodb-template: &mongodbhealthcheck
+x-healthcheck-postgres-template: &postgreshealthcheck
   healthcheck:
-    test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+    test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
     interval: 30s
-    timeout: 30s
-    retries: 3
+    timeout: 10s
+    retries: 5
 
 x-healthcheck-redis-template: &redishealthcheck
   healthcheck:
@@ -14,45 +14,23 @@ x-healthcheck-redis-template: &redishealthcheck
     timeout: 30s
     retries: 3
 
-x-healthcheck-backend: &backendhealthcheck
-  healthcheck:
-    test: ["CMD", "sh", "-c", "echo 'Checking backend health via /health' && curl -f http://localhost:8000/health || exit 1"]
-    interval: 30s
-    timeout: 10s
-    retries: 5
 
 services:
-  web:
-    image: athenax-backend
-    build: .
-    restart: always
-    env_file:
-      - .env
+  postgres:
+    image: postgres:17
+    container_name: scholarx-db
     ports:
-      - "8000:8000"
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - athenax_network
-    <<: *backendhealthcheck
-
-  mongodb:
-    image: mongo:7.0.14
-    container_name: mongodb
-    ports:
-      - "27017:27017"
+      - "5432:5432"
     volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-    env_file:
-      - .env
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     networks:
-      - athenax_network
+      - scholarx_network
     restart: always
-    <<: *mongodbhealthcheck
+    <<: *postgreshealthcheck
 
   redis:
     image: redis:alpine3.20
@@ -61,14 +39,13 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - athenax_network
+      - scholarx_network
     command: ["redis-server", "--bind", "0.0.0.0"]
     <<: *redishealthcheck
 
 networks:
-  athenax_network:
+  scholarx_network:
     driver: bridge
 
 volumes:
-  mongodb_data:
-  mongodb_config:
+  postgres_data:

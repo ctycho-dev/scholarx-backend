@@ -1,211 +1,177 @@
-from datetime import datetime
-from typing import Optional, Type, Generic, TypeVar, Dict, Union, Any
-from bson import ObjectId
-from beanie import PydanticObjectId, Document
+# app/common/base_repository.py
+from typing import Type, TypeVar, Generic, Optional, Dict, Any, Union
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import and_
+from sqlalchemy import update as sqlalchemy_update, delete as sqlalchemy_delete
+from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime, timezone
+
 
 from app.exceptions import NotFoundError, DatabaseError
-from app.domain.user.schema import UserOut
-from app.domain.user.model import User
 
-
-T = TypeVar('T', bound=Document)
-C = TypeVar('C', bound=BaseModel)
-S = TypeVar('S', bound=BaseModel)
+T = TypeVar("T")  # SQLAlchemy model
+S = TypeVar("S", bound=BaseModel)  # Output schema
+C = TypeVar("C", bound=BaseModel)  # Create schema
 
 
 class BaseRepository(Generic[T, S, C]):
-    """
-    Base repository class for MongoDB collections.
-
-    This class provides common CRUD operations and can be extended by specific repository classes.
-    """
-
     def __init__(
         self,
-        collection: Type[T],
+        model: Type[T],
         default_schema: Type[S],
-        create_schema: Type[C]
+        create_schema: Type[C],
     ):
-        """
-        Initializes the BaseRepository with the collection and default schema.
-
-        Args:
-            collection (Type[T]): The MongoDB collection class.
-            default_schema (Type[S]): The default Pydantic schema class.
-        """
-        self.collection = collection
+        self.model = model
         self.default_schema = default_schema
         self.create_schema = create_schema
 
-    def _serialize(self, entity: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Serialize the entity by converting ObjectId fields to strings.
-
-        Args:
-            entity (Dict[str, Any]): The entity to serialize.
-
-        Returns:
-            Dict[str, Any]: The serialized entity.
-        """
-        serialized_entity = {}
-        for key, value in entity.items():
-            if isinstance(value, ObjectId):
-                serialized_entity[key] = str(value)
-            else:
-                serialized_entity[key] = value
-        return serialized_entity
-
-    async def get_by_id(self, _id: str) -> Optional[S]:
-        """
-        Retrieve an entity by its ID.
-
-        Args:
-            _id (str): The ID of the entity to retrieve.
-
-        Returns:
-            Optional[S]: The entity model if found, otherwise None.
-
-        Raises:
-            NotFoundError: If the entity with the specified ID is not found.
-            DatabaseError: If there is an issue with the database operation.
-        """
+    async def get_by_id(self, db: AsyncSession, _id: int) -> Optional[S]:
         try:
-            entity = await self.collection.get(PydanticObjectId(_id))
-            if not entity:
+            result = await db.execute(select(self.model).where(self.model.id == _id))
+            instance = result.scalar_one_or_none()
+            if not instance:
                 raise NotFoundError(f"Entity with ID {_id} not found")
-
-            entity_dict = self._serialize(entity.model_dump())
-            return self.default_schema(**entity_dict)
-        except NotFoundError as exc:
-            raise exc
+            return self.default_schema.model_validate(instance)
+        except NotFoundError:
+            raise
         except Exception as e:
             raise DatabaseError(f"Failed to retrieve entity: {str(e)}") from e
 
-    async def get_all(self, schema: Optional[Type[S]] = None) -> list[S]:
-        """
-        Retrieve all entities from the collection.
-
-        Args:
-            schema (Type[S]): The schema to use for serialization. If None, uses the default schema.
-
-        Returns:
-            list[S]: A list of entity models.
-
-        Raises:
-            DatabaseError: If there is an issue with the database operation.
-        """
+    async def get_all(self, db: AsyncSession, schema: Optional[Type[S]] = None) -> list[S]:
         try:
-            entities = await self.collection.find().to_list()
-            
-            return [(schema or self.default_schema)(**self._serialize(entity.model_dump())) for entity in entities]
+            result = await db.execute(select(self.model))
+            instances = result.scalars().all()
+            schema_cls = schema or self.default_schema
+            return [schema_cls.model_validate(instance) for instance in instances]
         except Exception as e:
             raise DatabaseError(f"Failed to retrieve all entities: {str(e)}") from e
 
     async def create(
         self,
-        entity: C,
+        db: AsyncSession,
+        entity: Union[Dict[str, Any], C],
         schema: Optional[Type[S]] = None,
-        current_user: Optional[User] = None
+        current_user_id: int | None = None,
     ) -> S:
-        """
-        Create a new entity in the collection.
-
-        Args:
-            entity (T): The entity data to create.
-
-        Returns:
-            S: The created entity model.
-
-        Raises:
-            DatabaseError: If there is an issue with the database operation.
-        """
         try:
             if isinstance(entity, BaseModel):
-                entity = self.collection(**entity.model_dump())
-                if current_user:
-                    if hasattr(entity, 'created_by'):
-                        entity.created_by = current_user
-                    if hasattr(entity, 'updated_by'):
-                        entity.updated_by = current_user
+                data = entity.model_dump()
+            else:
+                data = entity
 
-            created_entity = await self.collection.create(entity)
-            created_entity_dict = self._serialize(created_entity.model_dump())
+            db_obj = self.model(**data)
+            # Set audit fields if they exist
+            now = datetime.now(timezone.utc)
+            if hasattr(db_obj, 'created_at'):
+                db_obj.created_at = now
+            if hasattr(db_obj, 'updated_at'):
+                db_obj.updated_at = now
+            if current_user_id and hasattr(db_obj, 'created_by'):
+                db_obj.created_by = current_user_id
+            if current_user_id and hasattr(db_obj, 'updated_by'):
+                db_obj.updated_by = current_user_id
 
-            return (schema or self.default_schema)(**created_entity_dict)
+            db.add(db_obj)
+            await db.commit()
+            await db.refresh(db_obj)
+
+            schema_cls = schema or self.default_schema
+            return schema_cls.model_validate(db_obj)
         except Exception as e:
+            await db.rollback()
             raise DatabaseError(f"Failed to create entity: {str(e)}") from e
 
     async def update(
         self,
-        _id: str,
+        db: AsyncSession,
+        _id: int,
         update_data: Union[Dict[str, Any], BaseModel],
         schema: Optional[Type[S]] = None,
-        current_user: Optional[User] = None
+        current_user_id: int | None = None,
     ) -> S:
-        """
-        Update an entity in the collection.
-
-        Args:
-            _id (str): The ID of the entity to update.
-            update_data (Union[Dict[str, Any], BaseModel]): The data to update. Can be a dictionary or a Pydantic schema.
-            schema (Optional[Type[S]]): The schema to use for serialization. If None, uses the default schema.
-            current_user (Optional[User]): The current user performing the update.
-
-        Returns:
-            S: The updated entity model.
-
-        Raises:
-            NotFoundError: If the entity with the specified ID is not found.
-            DatabaseError: If there is an issue with the database operation.
-        """
         try:
-            if isinstance(update_data, BaseModel):
-                update_data = update_data.model_dump(
-                    exclude_unset=True,
-                    exclude={'created_at', 'id'}
-                )
-
-            entity = await self.collection.get(PydanticObjectId(_id))
-            if not entity:
+            # if hasattr(self.model, 'deleted_at'):
+            #     query = select(self.model).where(
+            #         and_(self.model.id == _id, self.model.deleted_at.is_(None))
+            #     )
+            # else:
+            query = select(self.model).where(self.model.id == _id)
+                
+            result = await db.execute(query)
+            instance = result.scalar_one_or_none()
+            if not instance:
                 raise NotFoundError(f"Entity with ID {_id} not found")
 
+            if isinstance(update_data, BaseModel):
+                update_data = update_data.model_dump(exclude_unset=True)
+
+            # Protected fields that should never be updated
+            protected_fields = {"id", "created_at", "created_by", "deleted_at", "deleted_by"}
+            
+            # Update only allowed fields
             for key, value in update_data.items():
-                if key not in {'created_at', 'id'}:
-                    setattr(entity, key, value)
+                if key not in protected_fields:
+                    setattr(instance, key, value)
 
-            if hasattr(entity, 'updated_at'):
-                entity.updated_at = datetime.now()
+            # Always update audit fields if they exist
+            if current_user_id and hasattr(instance, "updated_by"):
+                setattr(instance, "updated_by", current_user_id)
 
-            if current_user and hasattr(entity, 'updated_by'):
-                entity.updated_by = current_user
+            await db.commit()
+            await db.refresh(instance)
 
-            await entity.save()
-
-            updated_entity_dict = self._serialize(entity.model_dump())
-            return (schema or self.default_schema)(**updated_entity_dict)
-        except NotFoundError as e:
-            raise e
+            schema_cls = schema or self.default_schema
+            return schema_cls.model_validate(instance)
+        except NotFoundError:
+            raise
         except Exception as e:
+            await db.rollback()
             raise DatabaseError(f"Failed to update entity: {str(e)}") from e
 
-    async def delete_by_id(self, _id: str) -> None:
-        """
-        Delete an entity by its ID.
-
-        Args:
-            _id (str): The ID of the entity to delete.
-
-        Raises:
-            NotFoundError: If the entity with the specified ID is not found.
-            DatabaseError: If there is an issue with the database operation.
-        """
+    async def soft_delete(
+        self,
+        db: AsyncSession,
+        _id: int,
+        current_user_id: Optional[str] = None,
+    ) -> None:
+        """Soft delete an entity by setting deleted_at and deleted_by."""
         try:
-            entity = await self.collection.get(PydanticObjectId(_id))
-            if not entity:
+            result = await db.execute(
+                select(self.model).where(
+                    and_(self.model.id == _id, self.model.deleted_at.is_(None))
+                )
+            )
+            instance = result.scalar_one_or_none()
+            if not instance:
                 raise NotFoundError(f"Entity with ID {_id} not found")
-            await entity.delete()
-        except NotFoundError as e:
-            raise e
+
+            # Set soft delete fields
+            if hasattr(instance, "deleted_at"):
+                instance.deleted_at = datetime.now(timezone.utc)
+            if current_user_id and hasattr(instance, "deleted_by"):
+                instance.deleted_by = current_user_id
+
+            await db.commit()
+        except NotFoundError:
+            raise
         except Exception as e:
+            await db.rollback()
+            raise DatabaseError(f"Failed to soft delete entity: {str(e)}") from e
+
+    async def delete_by_id(self, db: AsyncSession, _id: int) -> None:
+        """Hard delete an entity (permanently removes from database)."""
+        try:
+            result = await db.execute(select(self.model).where(self.model.id == _id))
+            instance = result.scalar_one_or_none()
+            if not instance:
+                raise NotFoundError(f"Entity with ID {_id} not found")
+
+            await db.delete(instance)
+            await db.commit()
+        except NotFoundError:
+            raise
+        except Exception as e:
+            await db.rollback()
             raise DatabaseError(f"Failed to delete entity: {str(e)}") from e

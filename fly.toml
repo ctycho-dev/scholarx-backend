@@ -1,0 +1,68 @@
+app = "scholarx-backend"
+primary_region = "ams"
+
+kill_signal = "SIGINT"
+kill_timeout = 120
+
+# Define services
+[http_service]
+  http_service = true
+  internal_port = 8000
+  protocol = "tcp"
+  force_https = true
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 100
+    soft_limit = 90
+
+  [[http_service.ports]]
+    port = "80"
+    handlers = ["http"]
+  [[http_service.ports]]
+    port = "443"
+    handlers = ["tls", "http"]
+
+# Build settings
+[build]
+#   image = "flyio/hellofly:latest"
+  dockerfile = "Dockerfile"
+
+# Environment variables (set via `fly secrets set KEY=value`)
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8000"
+  API_VERSION = "/api/v1"
+  MODE = "prod"
+
+  # MongoDB (use real Atlas URI!)
+  # MONGO_URI = "mongodb+srv://user:pass@cluster.mongodb.net/athenax_db"
+
+  # Redis (if using Redis on Fly or external)
+  REDIS_HOST = "localhost"
+  REDIS_PORT = "6379"
+
+  # Cloudflare R2
+  R2_ACCESS_KEY = "${R2_ACCESS_KEY}"
+  R2_SECRET_KEY = "${R2_SECRET_KEY}"
+  R2_ENDPOINT = "https://<your-account-id>.r2.cloudflarestorage.com"
+  R2_BUCKET_NAME = "your-bucket-name"
+
+  # Email
+  EMAIL_FROM = "${EMAIL_FROM}"
+  EMAIL_TO = "${EMAIL_TO}"
+  EMAIL_PWD = "${EMAIL_PWD}"
+
+  # Security
+  AUTH_PEPPER = "${AUTH_PEPPER}"
+  SECRET_KEY = "${SECRET_KEY}"
+  ALGORITHM = "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES = "60"
+
+  # Privy Auth
+  PRIVY_JWSK_URL = "https://auth.privy.io/api/v1/apps/YOUR_APP_ID/jwks.json"
+  PRIVY_APP_ID = "YOUR_APP_ID"
+
+# Deploy settings
+[deploy]
+  strategy = "rolling"  # Ensures zero-downtime; old version stays until new one is ready

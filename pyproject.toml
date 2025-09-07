@@ -1,0 +1,117 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scholarx-backend"
+version = "0.1.0"
+description = "Backend for ScholarX platform using FastAPI, Beanie, R2, and LLMs"
+authors = [{ name = "Ilnur Gumerov", email = "ilnur@example.com" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.10,<4.0"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: API",
+]
+
+# Automatically detect dependencies from your pip list
+dependencies = [
+    "fastapi>=0.115.4",
+    "uvicorn>=0.32.0",
+    "pydantic>=2.9.2",
+    "pydantic-settings>=2.6.0",
+    "beanie>=1.29.0",
+    "motor>=3.7.0",
+    "pymongo>=4.11.3",
+    "redis>=5.2.0",
+    "slowapi>=0.1.9",
+    "limits>=5.2.0",
+    "boto3>=1.35.99",
+    "python-jose>=3.3.0",
+    "passlib>=1.7.4",
+    "email-validator>=2.2.0",
+    "python-multipart>=0.0.20",
+    "orjson>=3.10.12",
+    "aioprometheus>=23.12.0",
+    "asyncpg>=0.30.0",
+    "psycopg2>=2.9.10",
+    "sqlalchemy>=2.0.36",
+    "httpx>=0.28.1",
+    "tenacity>=9.0.0",
+    "python-dotenv>=1.0.1",
+    "python-json-logger>=3.3.0",
+    "gunicorn>=23.0.0",
+    "hiredis>=3.0.0",
+    "argonauts",  # optional: for JWT if not covered
+    "pycryptodome",  # if using cryptography beyond basic JWT
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.1",
+    "anyio>=4.6.2.post1",
+    "pytest-asyncio",
+    "pytest-benchmark",
+    "pytest-cov",
+    "mypy",
+    "ruff",
+    "black",
+    "isort",
+    "mongomock",
+    "httpx",  # for test client
+    "types-redis",
+    "types-setuptools",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = ["tests*", "scripts*", "venv*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "tests.py"]
+python_paths = ["."]
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "asyncio: mark async tests",
+    "benchmark: performance tests"
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError"
+]
+
+[tool.ruff]
+select = ["E", "W", "F", "I", "B", "C4", "ARG", "PT", "Q", "SIM"]
+ignore = []
+line-length = 90
+
+[tool.black]
+line-length = 90
+target-version = ['py310', 'py311', 'py312', 'py313']
+
+[tool.isort]
+profile = "black"
+line_length = 90
+known_first_party = "app"
+
+[project.scripts]
+scholarx-cli = "app.cli:main"

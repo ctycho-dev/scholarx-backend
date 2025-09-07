@@ -14,6 +14,7 @@ from app.domain.image.schema import (
     ImageOut,
     ImageUpdate
 )
+from app.enums.enums import ImageType
 from app.middleware.rate_limiter import limiter
 from app.core.dependencies import (
     get_image_service,
@@ -26,10 +27,11 @@ logger = get_logger()
 router = APIRouter()
 
 
-@router.post("/{bucket}", response_model=ImageOut, status_code=201)
+@router.post("/{image_type}/{bucket}", response_model=ImageOut, status_code=201)
 @limiter.limit("5/minute")
 async def upload_image_file(
     request: Request,
+    image_type: ImageType,
     bucket: str,
     file: UploadFile,
     service: ImageService = Depends(get_image_service),
@@ -39,12 +41,17 @@ async def upload_image_file(
     Useful for admin panels or non-JS clients.
     """
     try:
-        image_out = await service.upload_file(file, bucket)
+        image_out = await service.upload_file(file, image_type, bucket)
         return image_out
-
+    except ValueError as e:
+        logger.error('[upload_image_file] ValueError: %s', e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        logger.error('[upload_image_file] HTTPException: %s', e)
+        raise
     except Exception as e:
-        logger.error('[upload_image_file] %s', e)
-        raise HTTPException(status_code=500, detail="File upload failed") from e
+        logger.error('[upload_image_file] Exception: %s', e)
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}") from e
 
 @router.get("/", response_model=List[ImageOut])
 @limiter.limit("100/minute")

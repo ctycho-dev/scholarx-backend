@@ -1,150 +1,134 @@
-from datetime import datetime
-from beanie.operators import Eq
-from beanie import PydanticObjectId
+# app/domain/submit/research/repository.py
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import exists, update
+from typing import Optional, List
+
 from app.common.base_repository import BaseRepository
 from app.domain.submit.research.model import ResearchSubmit
 from app.domain.submit.research.schema import (
     ResearchSubmitSchema,
     ResearchOut,
-    Comment
+    ResearchSteps
 )
-from app.domain.user.model import User
-from app.exceptions import (
-    NotFoundError
-)
-from app.enums.enums import (
-    ReportState,
-    UserRole
-)
+from app.enums.enums import ReportState
+from app.exceptions import DatabaseError, NotFoundError
 
 
-class ResearchRepository(
-    BaseRepository[ResearchSubmit, ResearchOut, ResearchSubmitSchema]
-):
+class ResearchRepository(BaseRepository[ResearchSubmit, ResearchOut, ResearchSubmitSchema]):
     """
-    MongoDB repository implementation for managing users.
-
-    This class extends the BaseRepository and implements the BaseRepository interface for the UserCollection,
-    providing CRUD operations and additional methods specific to users.
+    PostgreSQL repository for ResearchSubmit using SQLAlchemy (async).
+    Extends BaseRepository to inherit CRUD, and adds research-specific methods.
     """
 
     def __init__(self):
-        """
-        Initializes the UserRepository with the UserCollection and UserOut schema.
-        """
         super().__init__(ResearchSubmit, ResearchOut, ResearchSubmitSchema)
 
     async def get_by_user(
         self,
-        privy_id: str,
-    ) -> list[ResearchOut] | None:
+        db: AsyncSession,
+        user_id: int,
+    ) -> List[ResearchOut]:
         """
-        Get user by privy_id with optional field projection.
-
-        Args:
-            privy_id: The user's privy_id
-
-        Returns:
-            User model instance or None if not found
-
+        Fetch research submissions for a given user_id.
+        Returns list for API consistency (typically 0 or 1 item due to unique constraint).
         """
-        data = await ResearchSubmit.find({"user_privy_id": privy_id}).to_list()
+        try:
+            result = await db.execute(
+                select(ResearchSubmit).where(ResearchSubmit.user_id == user_id)
+            )
+            research_list = result.scalars().all()
+            
+            return [
+                ResearchOut(
+                    id=research.id,
+                    steps=ResearchSteps.model_validate(research.steps),
+                    state=research.state,
+                    user_id=research.user_id,
+                    created_at=research.created_at,
+                    updated_at=research.updated_at
+                )
+                for research in research_list
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Failed to fetch research for user {user_id}: {str(e)}") from e
 
-        return [ResearchOut(**self._serialize(x.model_dump())) for x in data]
-    
     async def get_by_state(
         self,
-        state: str,
-    ) -> list[ResearchOut]:
+        db: AsyncSession,
+        state: ReportState,
+    ) -> List[ResearchOut]:
         """
-        Retrieve audit submissions filtered by report state, ordered by newest first.
-
-        Args:
-            state (str): Desired state to filter audits by.
-
-        Returns:
-            list[ResearchOut]: List of audits in the given state.
+        Retrieve research submissions filtered by report state, ordered by newest first.
         """
-        data = (
-            await ResearchSubmit.find(Eq(ResearchSubmit.state, state))
-            .sort("-created_at")
-            .to_list()
-        )
-        return [ResearchOut(**self._serialize(x.model_dump())) for x in data]
+        try:
+            result = await db.execute(
+                select(ResearchSubmit)
+                .where(ResearchSubmit.state == state)
+                .order_by(ResearchSubmit.created_at.desc())
+            )
+            research_list = result.scalars().all()
+            
+            return [
+                ResearchOut(
+                    id=research.id,
+                    steps=ResearchSteps.model_validate(research.steps),
+                    state=research.state,
+                    user_id=research.user_id,
+                    created_at=research.created_at,
+                    updated_at=research.updated_at
+                )
+                for research in research_list
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Failed to fetch research by state {state}: {str(e)}") from e
 
     async def update_state(
         self,
-        _id: str,
+        db: AsyncSession,
+        research_id: int,
         state: ReportState,
-        current_user: User | None
+        updated_by: Optional[int] = None
     ) -> ResearchOut:
         """
-        Update the state of an audit submission by its ID.
-
-        Optionally updates metadata like `updated_at` and `updated_by`.
-
-        Args:
-            _id (str): The ID of the audit submission to update.
-            state (ReportState): The new state to assign.
-            current_user (User | None): The user performing the update.
-
-        Returns:
-            AuditOut: The updated audit submission.
-
-        Raises:
-            NotFoundError: If no audit with the specified ID is found.
+        Update the state of a research submission by its ID.
+        Uses the audit mixin fields for tracking changes.
         """
-        doc = await self.collection.find_one({"_id": PydanticObjectId(_id)})
-        if not doc:
-            raise NotFoundError(f"Audit with ID {_id} not found")
+        try:
+            # Check if research exists
+            exists_query = select(exists().where(ResearchSubmit.id == research_id))
+            exists_result = await db.execute(exists_query)
+            if not exists_result.scalar():
+                raise NotFoundError(f"Research with ID {research_id} not found")
 
-        doc.state = state
+            # Update the state and audit fields
+            update_data = {"state": state}
+            if updated_by:
+                update_data["updated_by"] = updated_by
 
-        if hasattr(doc, 'updated_at'):
-            doc.updated_at = datetime.now()
+            await db.execute(
+                update(ResearchSubmit)
+                .where(ResearchSubmit.id == research_id)
+                .values(**update_data)
+            )
+            await db.commit()
 
-        if current_user and hasattr(doc, 'updated_by'):
-            doc.updated_by = current_user
-
-        await doc.save()
-        return ResearchOut(**self._serialize(doc.model_dump()))
-
-    async def add_comment(
-        self,
-        _id: str,
-        comment: Comment,
-        current_user: User | None
-    ) -> Comment:
-        """
-        Add a comment to an audit submission and update state if role is BD.
-
-        Also updates metadata like `updated_at` and `updated_by` if applicable.
-
-        Args:
-            _id (str): The ID of the audit submission to comment on.
-            comment (Comment): The comment to add.
-            current_user (User | None): The user performing the action.
-
-        Returns:
-            Comment: The comment that was added.
-
-        Raises:
-            NotFoundError: If the audit submission with the specified ID is not found.
-        """
-        doc = await self.collection.find_one({"_id": PydanticObjectId(_id)})
-        if not doc:
-            raise NotFoundError(f"Audit with ID {_id} not found")
-
-        doc.comments.append(comment)
-
-        if comment.role == UserRole.BD:
-            doc.state = ReportState.UPDATE_INFO
-
-        if hasattr(doc, 'updated_at'):
-            doc.updated_at = datetime.now()
-
-        if current_user and hasattr(doc, 'updated_by'):
-            doc.updated_by = current_user
-
-        await doc.save()
-        return comment
+            # Fetch and return the updated research
+            result = await db.execute(
+                select(ResearchSubmit).where(ResearchSubmit.id == research_id)
+            )
+            research = result.scalar_one()
+            
+            return ResearchOut(
+                id=research.id,
+                steps=ResearchSteps.model_validate(research.steps),
+                state=research.state,
+                user_id=research.user_id,
+                created_at=research.created_at,
+                updated_at=research.updated_at
+            )
+        except NotFoundError:
+            raise
+        except Exception as e:
+            await db.rollback()
+            raise DatabaseError(f"Failed to update research state: {str(e)}") from e

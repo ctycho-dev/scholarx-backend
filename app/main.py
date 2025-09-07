@@ -7,7 +7,6 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.api.routers import api_router
 from app.core.config import settings
 from app.database.connection import db_manager
-# from app.infrastructure.storage.storj.service import storj_service
 from app.infrastructure.storage.cloudflare.r2_service import CloudflareR2Service
 from app.core.logger import get_logger, cleanup_logger
 from app.infrastructure.redis.redis_client import redis_client
@@ -22,27 +21,27 @@ async def lifespan(app: FastAPI):
     try:
         try:
             logger.info("Initializing application resources")
-            await db_manager.connect()
+            db_manager.init_engine()
         except ConnectionError as conn_err:
             logger.critical("Connection failed: %s", conn_err, exc_info=True)
             raise
 
         try:
-            # storj_service.connect()
-            app.state.r2_service = CloudflareR2Service()
-            app.state.r2_service.connect()
+            app.state.r2_service = CloudflareR2Service()  # ← This calls .connect()
+            logger.info("R2 service initialized")
         except Exception as e:
-            logger.error("Error disconnecting storage: %s", e, exc_info=True)
+            logger.error("Failed to initialize R2: %s", e, exc_info=True)
+            app.state.r2_service = None
 
         logger.info("App started")
         yield
 
     finally:
-        await db_manager.disconnect()
+        await db_manager.close()
         await redis_client.close()
         await redis_client.connection_pool.disconnect()
-        # storj_service.disconnect()
-        # r2_service.disconnect()
+        if app.state.r2_service is not None:
+            app.state.r2_service.disconnect()
 
         cleanup_logger()
 
@@ -50,10 +49,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.state.limiter = limiter
-app.add_exception_handler(
-    RateLimitExceeded,
-    rate_limit_exceeded_handler
-)
+# app.add_exception_handler(
+#     RateLimitExceeded,
+#     rate_limit_exceeded_handler
+# )
 
 origins = [
     "https://www.athenax.co",
