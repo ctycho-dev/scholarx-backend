@@ -7,7 +7,6 @@ from app.enums.enums import ImageType, ImageStatus
 
 
 class ImageCreate(BaseModel):
-    uploaded_by: str
     type: ImageType
     filename: str
     content_type: str
@@ -23,7 +22,6 @@ class ImageOut(BaseModel):
     id: int
     r2_key: str | None
     public_url: str | None
-    uploaded_by: str
     status: str
     type: str
     article_id: Optional[str] = None

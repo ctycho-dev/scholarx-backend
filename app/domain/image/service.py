@@ -42,9 +42,8 @@ class ImageService:
         original_ct = file.content_type or mimetypes.guess_type(original_name)[0]
 
         new_doc = await self.repo.create(
-            self.db, 
+            self.db,
             ImageCreate(
-                uploaded_by=str(self.user.id),  # Ensure string conversion
                 type=image_type,
                 filename=file.filename or "upload",
                 content_type=file.content_type or "application/octet-stream"
