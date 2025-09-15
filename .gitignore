@@ -27,6 +27,7 @@ wheels/
 venv/
 env/
 ENV/
+.env.secrets
 
 # === Environment Variables ===
 .env

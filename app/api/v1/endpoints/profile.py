@@ -5,7 +5,7 @@ from fastapi import (
     status,
     Request
 )
-from app.middleware.rate_limiter import limiter
+# from app.middleware.rate_limiter import limiter
 from app.core.dependencies import get_current_user
 from app.domain.profile.schema import (
     ProfileCreate,
@@ -24,7 +24,7 @@ router = APIRouter()
 
 
 @router.post("/", response_model=ProfileOut, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def create_profile(
     request: Request,
     data: ProfileCreate,
@@ -64,7 +64,7 @@ async def create_profile(
 
 
 @router.patch("/{profile_id}/")
-@limiter.limit("15/minute")
+# @limiter.limit("15/minute")
 async def update_profile(
     request: Request,
     profile_id: int,
@@ -106,7 +106,7 @@ async def update_profile(
 
 
 @router.get("/me/")
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def get_my_profile(
     request: Request,
     service: ProfileService = Depends(get_profile_service)

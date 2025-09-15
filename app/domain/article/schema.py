@@ -27,32 +27,14 @@ class ArticleCreate(BaseModel):
 
 
 class ArticleUpdate(BaseModel):
-    """
-    Schema for updating an existing article (all fields optional).
-    Only provided fields will be updated.
-    """
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    slug: Optional[str] = Field(None, max_length=100)
-    html_content: Optional[str] = Field(None, max_length=50000)
-    cover_image: Optional[str] = None
-    type: Optional[Literal["audit", "research"]] = None
+    """Schema for updating articles."""
+    title: Optional[str] = None
+    content: Optional[str] = None
+    summary: Optional[str] = None
     state: Optional[ArticleState] = None
-    related_audit_ids: Optional[List[str]] = None
-    related_research_ids: Optional[List[str]] = None
-
-    model_config = {
-        "extra": "forbid",
-        "from_attributes": True,
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "title": "Updated Title",
-                    "cover_image": "https://cdn.example.com/image.jpg",
-                    "html_content": "<p>Partially updated content...</p>"
-                }
-            ]
-        }
-    }
+    tags: Optional[List[str]] = None
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ArticleOut(BaseModel):

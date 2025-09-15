@@ -131,3 +131,11 @@ class CloudflareR2Service:
                 ExtraArgs={'ContentType': content_type}
             )
         return self._call_with_reconnect(_action)
+    
+    def extract_key_if_url(self, key_or_url: str) -> str:
+        """Extract key from URL if it's a URL, otherwise return as-is."""
+        if key_or_url.startswith(('http://', 'https://')):
+            from urllib.parse import urlparse
+            parsed = urlparse(key_or_url)
+            return parsed.path.lstrip('/')
+        return key_or_url

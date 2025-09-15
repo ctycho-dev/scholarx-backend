@@ -10,6 +10,7 @@ from app.domain.profile.schema import (
     ProfileUpdate,
     ProfileOut
 )
+from app.infrastructure.storage.cloudflare.r2_service import CloudflareR2Service
 from app.domain.user.schema import (
     LinkedAccount,
     AuthProvider
@@ -24,12 +25,12 @@ class ProfileService:
         self,
         db: AsyncSession,
         repo: ProfileRepository,
-        user_repo: UserRepository,
+        r2_service: CloudflareR2Service,
         user: UserOut
     ):
         self.db = db
         self.repo = repo
-        self.user_repo = user_repo
+        self.r2_service = r2_service
         self.user = user
 
     async def get_by_user_id(self, user_id: int) -> ProfileOut | None:
@@ -62,32 +63,35 @@ class ProfileService:
         if not profile:
             raise ValueError('Profile creation error.')
 
-        # updated_user = await self.user_repo.update(
-        #     self.db,
-        #     self.user.id,
-        #     {
-        #         "has_profile": True,
-        #         "account_type": profile.account_type
-        #     }
-        # )
-        # if not updated_user:
-        #     raise ValueError('User update failed.')
-
         return profile
 
     async def update(
         self,
-        user_id: int,
+        profile_id: int,
         data: ProfileUpdate
     ) -> ProfileOut:
         """
         Delete a message by its ID.
         """
-        updated = await self.repo.update(
-            self.db,
-            user_id,
-            data
-        )
+        # Get current profile
+        profile = await self.repo.get_by_id(self.db, profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail='Profile with provided id not found.')
+        
+        # Store old image URL for cleanup
+        old_image_url = profile.profile_image
+        
+        # Update the profile
+        updated = await self.repo.update(self.db, profile_id, data)
+        if (
+            old_image_url and
+            data.profile_image and
+            old_image_url != data.profile_image
+        ):
+            key = self.r2_service.extract_key_if_url(old_image_url)
+            self.r2_service.delete_file(
+                'scholarx-profile', key
+            )
         return updated
 
     async def get_profile_by_user(
@@ -114,3 +118,4 @@ class ProfileService:
                 profile_data.discord = account.username
         
         return profile_data
+

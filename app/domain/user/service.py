@@ -97,6 +97,7 @@ class UserService:
         return updated
 
     async def has_profile(self, user_id: int) -> bool:
+
         profile = await self.profile_repo.user_has_profile(self.db, user_id)
 
         return profile if profile is not None else False

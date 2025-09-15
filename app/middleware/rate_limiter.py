@@ -21,11 +21,12 @@ def rate_limit_key(request: Request):
 limiter = Limiter(
     key_func=rate_limit_key,
     default_limits=["200/minute", "20/second"],
-    storage_uri=f"redis://{settings.redis_host}:{settings.redis_port}",
+    # storage_uri=settings.REDIS_URL,
 )
 
 
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+
     if isinstance(exc, RateLimitExceeded):
         detail = getattr(exc, 'detail', "Rate limit exceeded. Please try again later.")
         raise HTTPException(

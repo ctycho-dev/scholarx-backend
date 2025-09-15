@@ -15,7 +15,7 @@ from app.domain.image.schema import (
     ImageUpdate
 )
 from app.enums.enums import ImageType
-from app.middleware.rate_limiter import limiter
+# from app.middleware.rate_limiter import limiter
 from app.core.dependencies import (
     get_image_service,
 )
@@ -28,7 +28,7 @@ router = APIRouter()
 
 
 @router.post("/{image_type}/{bucket}", response_model=ImageOut, status_code=201)
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def upload_image_file(
     request: Request,
     image_type: ImageType,
@@ -54,7 +54,7 @@ async def upload_image_file(
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}") from e
 
 @router.get("/", response_model=List[ImageOut])
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_all_images(
     request: Request,
     bucket: str = None,
@@ -74,7 +74,7 @@ async def get_all_images(
 
 
 @router.get("/{image_id}", response_model=ImageOut)
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_image_by_id(
     request: Request,
     image_id: str,
@@ -96,10 +96,10 @@ async def get_image_by_id(
 
 
 @router.delete("/{image_id}", status_code=200)
-@limiter.limit("10/hour")
+# @limiter.limit("10/hour")
 async def delete_image(
     request: Request,
-    image_id: str,
+    image_id: int,
     service: ImageService = Depends(get_image_service),
 ):
     """

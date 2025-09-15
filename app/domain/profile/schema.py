@@ -1,5 +1,6 @@
 from typing import Literal
 from pydantic import BaseModel, Field, ConfigDict, field_serializer
+from pydantic.alias_generators import to_camel, to_pascal
 from datetime import datetime
 
 
@@ -7,9 +8,18 @@ AccountType = Literal["Publisher", "Project", "Personal use"]
 OrganizationType = Literal["Startup", "Lab", "Corporate"]
 
 
-# ---------- PROFILE: CREATE / UPDATE / OUT ----------
+class CamelModel(BaseModel):
+    """Base model that converts snake_case to camelCase for JSON output"""
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        validate_by_name=True,     # ✅ NEW: Accept snake_case field names
+        validate_by_alias=True,    # ✅ NEW: Accept camelCase aliases  
+        from_attributes=True,
+    )
 
-class ProfileCreate(BaseModel):
+
+# ---------- PROFILE: CREATE / UPDATE / OUT ----------
+class ProfileCreate(CamelModel):
     """
     Create a Profile during onboarding (minimal required: account_type + username).
     """
@@ -52,7 +62,7 @@ class ProfileCreate(BaseModel):
     interests: list[str] = Field(default_factory=list)
 
 
-class ProfileUpdate(BaseModel):
+class ProfileUpdate(CamelModel):
     """
     PATCH-style updates for Profile only.
     All fields optional. Arrays replace by default (idempotent PUT semantics).
@@ -96,7 +106,7 @@ class ProfileUpdate(BaseModel):
     interests: list[str] | None = Field(None, max_length=15)  # max 10 items
 
 
-class ProfileOut(BaseModel):
+class ProfileOut(CamelModel):
 
     id: int
     user_id: int
@@ -143,4 +153,8 @@ class ProfileOut(BaseModel):
     def _ser_created_at(self, v: datetime) -> str:
         return v.isoformat()
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        alias_generator=to_camel
+    )

@@ -23,19 +23,12 @@ class Settings(BaseSettings):
     DEV_USER_ID: str
     host: str
     port: int
-    api_version: str
+    API_VERSION: str
 
     # Privy
     PRIVY_JWSK_URL: str
     PRIVY_APP_ID: str
     
-    # Mongo
-    MONGO_HOST: str
-    MONGO_PORT: int
-    MONGO_INITDB_ROOT_USERNAME: str
-    MONGO_INITDB_ROOT_PASSWORD: str
-    MONGO_INITDB_DATABASE: str
-
     # Postgres
     DATABASE_URL: str
 
@@ -45,13 +38,12 @@ class Settings(BaseSettings):
     R2_ENDPOINT: str
 
     # STORJ
-    STORJ_ACCESS_KEY: str
-    STORJ_SECRET_KEY: str
-    STORJ_ENDPOINT: str
+    # STORJ_ACCESS_KEY: str
+    # STORJ_SECRET_KEY: str
+    # STORJ_ENDPOINT: str
 
     # Redis
-    redis_host: str
-    redis_port: int
+    REDIS_URL: str
 
     # Email
     email_from: str

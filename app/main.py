@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.database.connection import db_manager
 from app.infrastructure.storage.cloudflare.r2_service import CloudflareR2Service
 from app.core.logger import get_logger, cleanup_logger
-from app.infrastructure.redis.redis_client import redis_client
+# from app.infrastructure.redis.redis_client import redis_client
 from app.middleware.rate_limiter import limiter, rate_limit_exceeded_handler
 
 logger = get_logger()
@@ -38,10 +38,14 @@ async def lifespan(app: FastAPI):
 
     finally:
         await db_manager.close()
-        await redis_client.close()
-        await redis_client.connection_pool.disconnect()
-        if app.state.r2_service is not None:
-            app.state.r2_service.disconnect()
+        # await redis_client.close()
+        # await redis_client.connection_pool.disconnect()
+        try:
+            if hasattr(app.state, 'r2_service') and app.state.r2_service is not None:
+                app.state.r2_service.disconnect()
+                logger.info("R2 service disconnected")
+        except Exception as e:
+            logger.error("Error disconnecting R2 service: %s", e)
 
         cleanup_logger()
 
@@ -49,10 +53,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.state.limiter = limiter
-# app.add_exception_handler(
-#     RateLimitExceeded,
-#     rate_limit_exceeded_handler
-# )
+app.add_exception_handler(
+    RateLimitExceeded,
+    rate_limit_exceeded_handler
+)
 
 origins = [
     "https://www.athenax.co",
@@ -73,7 +77,7 @@ app.add_middleware(
 app.add_middleware(SlowAPIMiddleware)
 
 # Include API routers
-app.include_router(api_router, prefix=settings.api_version)
+app.include_router(api_router, prefix=settings.API_VERSION)
 
 logger.info('Start application')
 

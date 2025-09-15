@@ -199,24 +199,26 @@ def get_user_service(
 def get_profile_service(
     db: AsyncSession = Depends(get_db),
     repo: ProfileRepository = Depends(get_profile_repo),
-    user_repo: UserRepository = Depends(get_user_repo),
+    r2_service: CloudflareR2Service = Depends(get_r2_service),
     user: UserOut = Depends(get_current_user)
 ) -> ProfileService:
-    return ProfileService(db=db, repo=repo, user_repo=user_repo, user=user)
+    return ProfileService(db=db, repo=repo, r2_service=r2_service, user=user)
 
 
 def get_article_service_with_auth(
+    db: AsyncSession = Depends(get_db),
     repo: ArticleRepository = Depends(get_article_repo),
     user: User = Depends(get_current_user)
 ) -> ArticleService:
-    return ArticleService(repo=repo, user=user)
+    return ArticleService(db=db, repo=repo, user=user)
 
 
 def get_article_service_optional(
+    db: AsyncSession = Depends(get_db),
     repo: ArticleRepository = Depends(get_article_repo),
     user: User | None = Depends(get_optional_user)
 ) -> ArticleService:
-    return ArticleService(repo=repo, user=user)
+    return ArticleService(db=db, repo=repo, user=user)
 
 
 def get_audit_service(

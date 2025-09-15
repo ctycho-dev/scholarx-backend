@@ -6,7 +6,7 @@ from fastapi import (
     status
 )
 from fastapi.responses import JSONResponse
-from app.middleware.rate_limiter import limiter
+# from app.middleware.rate_limiter import limiter
 from app.domain.submit.research.schema import (
     ResearchSubmitSchema,
     StateUpdateSchema,
@@ -22,7 +22,7 @@ router = APIRouter()
 
 
 @router.get("/")
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_researches(
     request: Request,
     service: ResearchService = Depends(get_research_service),
@@ -38,7 +38,7 @@ async def get_researches(
 
 
 @router.get("/user/")
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_researches_by_user(
     request: Request,
     service: ResearchService = Depends(get_research_service),
@@ -54,7 +54,7 @@ async def get_researches_by_user(
 
 
 @router.get("/state/{state}")
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_researches_by_state(
     request: Request,
     state: str,
@@ -71,7 +71,7 @@ async def get_researches_by_state(
 
 
 @router.get("/{research_id}")
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_research(
     request: Request,
     research_id: str,
@@ -91,7 +91,7 @@ async def get_research(
 
 
 @router.patch("/{research_id}")
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def update_research(
     request: Request,
     research_id: str,
@@ -116,7 +116,7 @@ async def update_research(
 
 
 @router.patch("/{research_id}/state")
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def update_research_state(
     request: Request,
     research_id: str,
@@ -138,7 +138,7 @@ async def update_research_state(
 
 
 @router.post("/{research_id}/comment")
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def add_research_comment(
     request: Request,
     research_id: str,
@@ -160,7 +160,7 @@ async def add_research_comment(
 
 
 @router.post("/")
-@limiter.limit("10/hour")
+# @limiter.limit("10/hour")
 async def create_research(
     request: Request,
     data: ResearchSubmitSchema,

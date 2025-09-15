@@ -10,11 +10,10 @@ from fastapi import (
     status,
     UploadFile
 )
-from app.infrastructure.storage.storj.service import storj_service
 from fastapi.responses import StreamingResponse
 from app.domain.submit.audit.schema import AuditSubmitSchema, StoredFile
-from app.middleware.rate_limiter import limiter
-from app.infrastructure.storage.storj.service import storj_service
+# from app.middleware.rate_limiter import limiter
+# from app.infrastructure.storage.storj.service import storj_service
 # from app.infrastructure.storage.cloudflare.service import r2_service
 
 from app.core.logger import get_logger
@@ -29,7 +28,7 @@ router = APIRouter()
 
 
 @router.get("/images/{img_id}/{folder:path}/{filename}")
-@limiter.limit("200/minute")
+# @limiter.limit("200/minute")
 async def proxy_storj_image(
     request: Request,
     img_id: str,
@@ -57,7 +56,7 @@ async def proxy_storj_image(
 
 
 # @router.post("/{bucket}")
-# @limiter.limit("5/minute")
+@limiter.limit("5/minute")
 # def upload_file(
 #     request: Request,
 #     bucket: str,
@@ -76,7 +75,7 @@ async def proxy_storj_image(
 
 
 # @router.post("/download/")
-# @limiter.limit("15/minute")
+@limiter.limit("15/minute")
 # async def get_download_url(
 #     request: Request,
 #     data: StoredFile

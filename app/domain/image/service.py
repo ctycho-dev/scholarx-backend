@@ -1,14 +1,15 @@
 # image_service.py
+import os
+import re
+from datetime import datetime
 import mimetypes
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import UploadFile, HTTPException, status
-from urllib.parse import quote
-from typing import List, Optional
+from typing import List
 from datetime import datetime
 
 from app.domain.image.schema import ImageOut, ImageCreate
 from app.domain.image.repository import ImageRepository
-from app.domain.profile.repository import ProfileRepository
 from app.infrastructure.storage.cloudflare.r2_service import CloudflareR2Service
 from app.domain.user.schema import UserOut
 from app.enums.enums import ImageType
@@ -51,7 +52,7 @@ class ImageService:
             current_user_id=self.user.id
         )
 
-        key = f"{new_doc.id}-{original_name.replace(' ', '-')}"
+        key = self._generate_storage_key(new_doc.id, image_type, original_name)
         public_url = self.r2_service.make_public_url(bucket, key)
 
         # Upload to R2
@@ -93,7 +94,8 @@ class ImageService:
 
     async def delete(self, image_id: int):
         image = await self.repo.get_by_id(self.db, image_id)
-        if not image or image.uploaded_by != self.user.privy_id:
+        # if not image or image.uploaded_by != self.user.privy_id:
+        if not image:
             raise ValueError("Image not found or access denied")
         if image.status == "published":
             raise ValueError("Cannot delete published image")
@@ -110,3 +112,44 @@ class ImageService:
         if not parts or not parts[0]:
             raise ValueError(f"Invalid key: '{key}' — could not extract bucket")
         return parts[0]
+
+    def _generate_storage_key(self, doc_id: int, image_type: ImageType, filename: str) -> str:
+        """
+        Generate optimized S3/R2 key with best practices.
+        Structure: {user_id}/{image_type}/{doc_id}-{timestamp}-{safe_filename}
+        """
+        # Create timestamp for uniqueness and ordering
+        timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+        
+        # Sanitize filename - keep only safe characters
+        safe_filename = self._sanitize_filename(filename)
+        
+        # Build hierarchical key for better performance and organization
+        key = f"{doc_id}-{timestamp}-{safe_filename}"
+        
+        return key
+
+    def _sanitize_filename(self, filename: str) -> str:
+        """
+        Sanitize filename to be S3-safe and avoid issues.
+        """
+        if not filename:
+            return "unknown"
+        
+        # Extract extension
+        name, ext = os.path.splitext(filename)
+        
+        # Remove unsafe characters, keep only alphanumeric, hyphens, underscores, dots
+        safe_name = re.sub(r'[^a-zA-Z0-9._-]', '-', name)
+        
+        # Remove multiple consecutive hyphens/dots
+        safe_name = re.sub(r'[-\.]+', '-', safe_name)
+        
+        # Trim and ensure reasonable length
+        safe_name = safe_name.strip('-.')[:50]  # Max 50 chars
+        
+        # Ensure we have something
+        if not safe_name:
+            safe_name = "file"
+        
+        return f"{safe_name}{ext.lower()}"

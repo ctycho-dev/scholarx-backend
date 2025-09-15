@@ -2,7 +2,7 @@ from fastapi import (
     APIRouter, Depends, HTTPException,
     Response, Request, status
 )
-from app.middleware.rate_limiter import limiter
+# from app.middleware.rate_limiter import limiter
 from app.domain.wishlist.service import WishlistService
 from app.core.dependencies import get_wishlist_service
 from app.domain.wishlist.schema import WishlistCreate
@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.get("/")
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_wishlish(
     request: Request,
     repo: WishlistService = Depends(get_wishlist_service)
@@ -29,7 +29,7 @@ async def get_wishlish(
 
 
 @router.post("/")
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def create_wishlish(
     request: Request,
     data: WishlistCreate,

@@ -8,7 +8,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 
-from app.middleware.rate_limiter import limiter
+# from app.middleware.rate_limiter import limiter
 from app.exceptions import NotFoundError
 from app.domain.submit.audit.schema import (
     AuditSubmitSchema,
@@ -27,7 +27,7 @@ router = APIRouter()
 
 
 @router.get("/")
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_audits(
     request: Request,
     service: AuditService = Depends(get_audit_service)
@@ -46,7 +46,8 @@ async def get_audits(
         HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
-        return await service.get_all()
+        return []
+        # return await service.get_all()
     except Exception as e:
         logger.error("[get_audits] Unexpected error: %s", e)
         raise HTTPException(
@@ -56,7 +57,7 @@ async def get_audits(
 
 
 @router.get("/user/")
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_audits_by_user(
     request: Request,
     service: AuditService = Depends(get_audit_service),
@@ -75,7 +76,8 @@ async def get_audits_by_user(
         HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
-        return await service.get_by_user()
+        return []
+        # return await service.get_by_user()
     except Exception as e:
         logger.error("[get_audits_by_user] Unexpected error: %s", e)
         raise HTTPException(
@@ -85,7 +87,7 @@ async def get_audits_by_user(
 
 
 @router.get("/state/{state}")
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_audits_by_state(
     request: Request,
     state: str,
@@ -106,7 +108,8 @@ async def get_audits_by_state(
         HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
-        return await service.get_by_state(state)
+        return []
+        # return await service.get_by_state(state)
     except Exception as e:
         logger.error("[get_audits_by_state] Unexpected error: %s", e)
         raise HTTPException(
@@ -116,7 +119,7 @@ async def get_audits_by_state(
 
 
 @router.get("/{audit_id}")
-@limiter.limit("100/minute")
+# @limiter.limit("100/minute")
 async def get_audit(
     request: Request,
     audit_id: str,
@@ -138,7 +141,8 @@ async def get_audit(
         HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
-        return await service.get_by_id(audit_id)
+        return None
+        # return await service.get_by_id(audit_id)
     except NotFoundError as e:
         logger.error("[get_audit] Audit not found: %s", audit_id)
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -151,7 +155,7 @@ async def get_audit(
 
 
 @router.patch("/{audit_id}/state")
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def update_audit_state(
     request: Request,
     audit_id: str,
@@ -184,43 +188,8 @@ async def update_audit_state(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{audit_id}/comment")
-@limiter.limit("5/minute")
-async def add_audit_comment(
-    request: Request,
-    audit_id: str,
-    data: CommentCreateSchema,
-    service: AuditService = Depends(get_audit_service),
-):
-    """
-    Add a comment to a specific audit record.
-
-    Args:
-        request (Request): Incoming HTTP request.
-        audit_id (str): UUID of the audit.
-        data (CommentCreateSchema): Comment payload.
-        service (AuditService): Injected audit service.
-
-    Returns:
-        JSONResponse: {"success": True} on success.
-
-    Raises:
-        HTTPException: 404 if audit not found.
-        HTTPException: 500 Internal Server Error on unexpected failure.
-    """
-    try:
-        await service.add_comment(audit_id, data.comment)
-        return JSONResponse(status_code=200, content={"success": True})
-    except NotFoundError as e:
-        logger.error("[add_audit_comment] Audit not found: %s", audit_id)
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        logger.error("[add_audit_comment] Unexpected error: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
 @router.patch("/{audit_id}")
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def update_audit(
     request: Request,
     audit_id: str,
@@ -265,7 +234,7 @@ async def update_audit(
 
 
 @router.post("/")
-@limiter.limit("10/hour")
+# @limiter.limit("10/hour")
 async def create_audit(
     request: Request,
     data: AuditSubmitSchema,

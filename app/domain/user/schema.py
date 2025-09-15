@@ -2,6 +2,7 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, ConfigDict, field_serializer
 from datetime import datetime
 from pydantic import Field, EmailStr
+from pydantic.alias_generators import to_camel, to_pascal
 from app.enums.enums import UserRole, WalletChains, AuthProvider
 
 
@@ -126,5 +127,9 @@ class UserOut(BaseModel):
         """Convert `created_at` to ISO 8601 string during the validation process."""
         return created_at.isoformat()
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        alias_generator=to_camel
+    )
 
