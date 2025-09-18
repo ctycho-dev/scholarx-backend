@@ -148,14 +148,10 @@ class ResearchSubmitSchema(BaseModel):
     """Project audit schema."""
 
     steps: ResearchSteps
-    user_privy_id: str | None = None
+    user_id: int | None = None
     state: ReportState = ReportState.SUBMITTED
 
 
 class StateUpdateSchema(BaseModel):
 
     state: ReportState
-
-
-class CommentCreateSchema(BaseModel):
-    comment: str

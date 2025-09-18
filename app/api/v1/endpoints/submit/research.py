@@ -10,8 +10,8 @@ from fastapi.responses import JSONResponse
 from app.domain.submit.research.schema import (
     ResearchSubmitSchema,
     StateUpdateSchema,
-    CommentCreateSchema
 )
+from app.enums.enums import ReportState
 from app.domain.submit.research.service import ResearchService
 from app.core.dependencies import get_research_service
 from app.exceptions import NotFoundError
@@ -57,7 +57,7 @@ async def get_researches_by_user(
 # @limiter.limit("100/minute")
 async def get_researches_by_state(
     request: Request,
-    state: str,
+    state: ReportState,
     service: ResearchService = Depends(get_research_service),
 ):
     """
@@ -74,7 +74,7 @@ async def get_researches_by_state(
 # @limiter.limit("100/minute")
 async def get_research(
     request: Request,
-    research_id: str,
+    research_id: int,
     service: ResearchService = Depends(get_research_service),
 ):
     """
@@ -94,7 +94,7 @@ async def get_research(
 # @limiter.limit("5/minute")
 async def update_research(
     request: Request,
-    research_id: str,
+    research_id: int,
     data: ResearchSubmitSchema,
     service: ResearchService = Depends(get_research_service),
 ):
@@ -119,7 +119,7 @@ async def update_research(
 # @limiter.limit("5/minute")
 async def update_research_state(
     request: Request,
-    research_id: str,
+    research_id: int,
     data: StateUpdateSchema,
     service: ResearchService = Depends(get_research_service),
 ):
@@ -134,28 +134,6 @@ async def update_research_state(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.error("[update_research_state] Unexpected error: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.post("/{research_id}/comment")
-# @limiter.limit("5/minute")
-async def add_research_comment(
-    request: Request,
-    research_id: str,
-    data: CommentCreateSchema,
-    service: ResearchService = Depends(get_research_service),
-):
-    """
-    Add a comment to a specific research record.
-    """
-    try:
-        await service.add_comment(research_id, data.comment)
-        return JSONResponse(status_code=200, content={"success": True})
-    except NotFoundError as e:
-        logger.error("[add_research_comment] Research not found: %s", research_id)
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        logger.error("[add_research_comment] Unexpected error: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

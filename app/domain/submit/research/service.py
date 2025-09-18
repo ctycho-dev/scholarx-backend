@@ -73,8 +73,8 @@ class ResearchService:
         return research
 
     async def update(
-        self, 
-        research_id: int, 
+        self,
+        research_id: int,
         data: ResearchSubmitSchema
     ) -> ResearchOut:
         """

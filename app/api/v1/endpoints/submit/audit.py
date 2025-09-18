@@ -12,7 +12,6 @@ from fastapi.responses import JSONResponse
 from app.exceptions import NotFoundError
 from app.domain.submit.audit.schema import (
     AuditSubmitSchema,
-    CommentCreateSchema,
     StateUpdateSchema
 )
 from app.core.dependencies import get_audit_service
@@ -122,7 +121,7 @@ async def get_audits_by_state(
 # @limiter.limit("100/minute")
 async def get_audit(
     request: Request,
-    audit_id: str,
+    audit_id: int,
     service: AuditService = Depends(get_audit_service),
 ):
     """
@@ -158,7 +157,7 @@ async def get_audit(
 # @limiter.limit("5/minute")
 async def update_audit_state(
     request: Request,
-    audit_id: str,
+    audit_id: int,
     data: StateUpdateSchema,
     service: AuditService = Depends(get_audit_service),
 ):
@@ -192,7 +191,7 @@ async def update_audit_state(
 # @limiter.limit("5/minute")
 async def update_audit(
     request: Request,
-    audit_id: str,
+    audit_id: int,
     data: AuditSubmitSchema,
     service: AuditService = Depends(get_audit_service),
 ):
