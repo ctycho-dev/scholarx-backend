@@ -16,11 +16,17 @@ handlers:
     level: DEBUG
     formatter: json
     filename: logout.log
+  kafka:
+    (): app.core.kafka_handler.KafkaHandler
+    level: INFO
+    formatter: json
+    topic: scholarx-logs
 loggers:
   root:
     level: INFO
-    handlers: [file]
-  sampleLogger:
+    handlers: [file, kafka]
+    propagate: False  # Prevent propagation to avoid duplicates
+  app:  # Add app-specific logger
     level: INFO
-    handlers: [console]
+    handlers: [file, kafka]
     propagate: False

@@ -5,46 +5,48 @@ from pydantic.alias_generators import to_camel, to_pascal
 from app.enums.enums import ArticleState
 
 
-class ArticleCreate(BaseModel):
+class CamelModel(BaseModel):
+    """Base model that converts snake_case to camelCase for JSON output"""
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        validate_by_name=True,     # ✅ NEW: Accept snake_case field names
+        validate_by_alias=True,    # ✅ NEW: Accept camelCase aliases  
+        from_attributes=True,
+    )
+
+
+class ArticleCreate(CamelModel):
     """
     Schema for creating a new article.
     """
     title: str = Field(..., min_length=1, max_length=200)
-    slug: str = Field(..., max_length=100)
+    slug: str = Field(max_length=100, default='')
     html_content: str = Field(default="", max_length=50000)
-    cover_image: Optional[str] = None
-    type: Literal["audit", "research"]
+    type: Literal["audit", "research"] = 'research'
     state: ArticleState = ArticleState.DRAFT
-    related_audit_ids: List[str] = []
-    related_research_ids: List[str] = []
-
-    model_config = ConfigDict(
-        extra="forbid",
-        from_attributes=True,
-        populate_by_name=True,
-        alias_generator=to_pascal
-    )
 
 
-class ArticleUpdate(BaseModel):
+class ArticleUpdate(CamelModel):
     """Schema for updating articles."""
     title: Optional[str] = None
-    content: Optional[str] = None
+    html_content: Optional[str] = None
+    slug: str | None = None
+    cover_image: str | None = None
     summary: Optional[str] = None
-    state: Optional[ArticleState] = None
     tags: Optional[List[str]] = None
     
     model_config = ConfigDict(from_attributes=True)
 
 
-class ArticleOut(BaseModel):
-    id: str
+class ArticleOut(CamelModel):
+    id: int
     title: str
     slug: str
+    summary: str | None
     html_content: str
-    cover_image: Optional[str] = None
-    type: Literal["audit", "research"]
+    cover_image: str | None
     state: ArticleState
+    author_profile_id: int | None
     created_at: datetime
     updated_at: datetime
 
@@ -55,9 +57,3 @@ class ArticleOut(BaseModel):
     @field_serializer('updated_at')
     def serialize_updated_at(self, updated_at: datetime) -> str:
         return updated_at.isoformat()
-
-    model_config = ConfigDict(
-        from_attributes=True,
-        populate_by_name=True,
-        alias_generator=to_camel
-    )

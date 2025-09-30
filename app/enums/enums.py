@@ -63,9 +63,9 @@ class ReportState(str, Enum):
 
 class ArticleState(str, Enum):
 
-    DRAFT = "Draft"
-    PUBLISHED = "Published"
-    ARCHIVED = "Archived"
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
 
 
 class ImageType(str, Enum):

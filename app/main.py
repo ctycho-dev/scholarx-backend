@@ -12,7 +12,8 @@ from app.core.logger import get_logger, cleanup_logger
 # from app.infrastructure.redis.redis_client import redis_client
 from app.middleware.rate_limiter import limiter, rate_limit_exceeded_handler
 
-logger = get_logger()
+
+logger = get_logger('app.main')
 
 
 @asynccontextmanager

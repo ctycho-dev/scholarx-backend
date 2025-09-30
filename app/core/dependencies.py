@@ -165,17 +165,37 @@ async def get_current_user(
 
 async def get_optional_user(
     request: Request,
+    db: AsyncSession = Depends(get_db),
     creds: HTTPAuthorizationCredentials = Depends(security),
     user_repo: UserRepository = Depends(get_user_repo)
 ) -> UserOut | None:
     try:
-        return await get_current_user(request, creds, user_repo)
+        return await get_current_user(request, db, creds, user_repo)
     except HTTPException as e:
         if e.status_code in {401, 404}:
             return None
         raise
     except Exception:
         return None
+
+
+async def get_user_with_profile(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    creds: HTTPAuthorizationCredentials = Depends(security),
+    user_repo: UserRepository = Depends(get_user_repo),
+    profile_repo: ProfileRepository = Depends(get_profile_repo)
+) -> UserOut | None:
+    try:
+        user = await get_current_user(request, db, creds, user_repo)
+
+        profile = await profile_repo.get_by_user_id(db, user.id)
+        if not profile:
+            raise HTTPException(status_code=400, detail='Profile for user not found.')
+        user.profile_id = profile.id
+        return user
+    except HTTPException as e:
+        raise e
 
 
 # -------------------------
@@ -208,7 +228,7 @@ def get_profile_service(
 def get_article_service_with_auth(
     db: AsyncSession = Depends(get_db),
     repo: ArticleRepository = Depends(get_article_repo),
-    user: User = Depends(get_current_user)
+    user: UserOut = Depends(get_user_with_profile)
 ) -> ArticleService:
     return ArticleService(db=db, repo=repo, user=user)
 
@@ -216,7 +236,7 @@ def get_article_service_with_auth(
 def get_article_service_optional(
     db: AsyncSession = Depends(get_db),
     repo: ArticleRepository = Depends(get_article_repo),
-    user: User | None = Depends(get_optional_user)
+    user: UserOut | None = Depends(get_optional_user)
 ) -> ArticleService:
     return ArticleService(db=db, repo=repo, user=user)
 

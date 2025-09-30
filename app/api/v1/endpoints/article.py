@@ -13,13 +13,14 @@ from app.domain.article.schema import ArticleCreate, ArticleOut, ArticleUpdate
 # from app.middleware.rate_limiter import limiter
 from app.core.dependencies import (
     get_article_service_with_auth,
-    get_article_service_optional
+    get_article_service_optional,
+    get_user_with_profile
 )
-from app.enums.enums import AppMode
+from app.enums.enums import AppMode, ArticleState
 from app.core.config import settings
 from app.core.logger import get_logger
 
-logger = get_logger()
+logger = get_logger('api.v1.article')
 router = APIRouter()
 
 
@@ -75,12 +76,15 @@ async def search_articles(
 # @limiter.limit("100/minute")
 async def get_articles_by_user(
     request: Request,
+    state: ArticleState | None = Query(None, description="Filter by state: draft, published"),
     service: ArticleService = Depends(get_article_service_with_auth),
 ):
     """
     Get all articles by the authenticated user.
     """
     try:
+        if state:
+            return await service.get_by_user_and_state(state)
         return await service.get_by_user()
     except ValueError as e:
         logger.error('[get_articles_by_user] ValueError: %s', e)
@@ -90,54 +94,6 @@ async def get_articles_by_user(
         raise e
     except Exception as e:
         logger.error('[get_articles_by_user] Exception: %s', e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while updating user details"
-        ) from e
-    
-
-@router.get("/user/drafts", response_model=List[ArticleOut])
-# @limiter.limit("50/minute")
-async def get_user_drafts(
-    request: Request,
-    service: ArticleService = Depends(get_article_service_with_auth),
-):
-    """
-    Get all draft articles for the authenticated user.
-    """
-    try:
-        return await service.get_by_user_and_state("draft")
-    except ValueError as e:
-        logger.error('[get_user_drafts] ValueError: %s', e)
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except HTTPException as e:
-        logger.error('[get_user_drafts] HTTPException: %s', e)
-        raise e
-    except Exception as e:
-        logger.error('[get_user_drafts] Exception: %s', e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch drafts"
-        ) from e
-
-
-@router.get("/state/{state}", response_model=List[ArticleOut])
-# @limiter.limit("100/minute")
-async def get_articles_by_state(
-    request: Request,
-    state: str,
-    service: ArticleService = Depends(get_article_service_with_auth),
-):
-    try:
-        return await service.get_by_state(state)
-    except ValueError as e:
-        logger.error('[get_articles_by_state] ValueError: %s', e)
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except HTTPException as e:
-        logger.error('[get_articles_by_state] HTTPException: %s', e)
-        raise e
-    except Exception as e:
-        logger.error('[get_articles_by_state] Exception: %s', e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while updating user details"
@@ -177,8 +133,8 @@ async def create_article(
     try:
         if settings.mode == AppMode.TEST:
             return JSONResponse(status_code=200, content={"success": True})
-        await service.create(data)
-        return JSONResponse(status_code=200, content={"success": True})
+        article = await service.create(data)
+        return article
     except ValueError as e:
         logger.error('[create_article] ValueError: %s', e)
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -248,6 +204,7 @@ async def publish_article(
             detail="Failed to update article"
         ) from e
 
+
 @router.patch("/{article_id}/unpublish", response_model=ArticleOut)
 # @limiter.limit("20/hour")
 async def unpublish_article(
@@ -272,6 +229,7 @@ async def unpublish_article(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update article"
         ) from e
+
 
 @router.delete("/{article_id}", status_code=204)
 # @limiter.limit("10/hour")

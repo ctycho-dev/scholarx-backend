@@ -15,8 +15,8 @@ class ArticleRepository(BaseRepository[Article, ArticleOut, ArticleCreate]):
         super().__init__(Article, ArticleOut, ArticleCreate)
 
     async def get_by_user_id(
-        self, 
-        db: AsyncSession, 
+        self,
+        db: AsyncSession,
         user_id: int
     ) -> list[ArticleOut]:
         """Get all articles by user ID using SQLAlchemy."""
@@ -30,7 +30,7 @@ class ArticleRepository(BaseRepository[Article, ArticleOut, ArticleCreate]):
             return [ArticleOut.model_validate(article) for article in articles]
         except Exception as e:
             raise DatabaseError(f"Failed to get articles for user {user_id}: {str(e)}") from e
-
+    
     async def get_by_state(
         self, 
         db: AsyncSession, 
@@ -52,16 +52,17 @@ class ArticleRepository(BaseRepository[Article, ArticleOut, ArticleCreate]):
         """Get all published articles."""
         return await self.get_by_state(db, ArticleState.PUBLISHED)
 
-    async def get_drafts_by_user(
+    async def get_by_user_and_state(
         self,
         db: AsyncSession,
-        user_id: int
+        profile_id: int,
+        state: ArticleState
     ) -> list[ArticleOut]:
-        """Get user's draft articles."""
+        """Get articles by user and state."""
         try:
             query_conditions = [
-                self.model.user_id == user_id,
-                self.model.state == ArticleState.DRAFT
+                self.model.author_profile_id == profile_id,
+                self.model.state == state
             ]
             
             query = select(self.model).where(
@@ -72,7 +73,7 @@ class ArticleRepository(BaseRepository[Article, ArticleOut, ArticleCreate]):
             articles = result.scalars().all()
             return [ArticleOut.model_validate(article) for article in articles]
         except Exception as e:
-            raise DatabaseError(f"Failed to get drafts for user {user_id}: {str(e)}") from e
+            raise DatabaseError(f"Failed to get articles for profile {profile_id} with state {state}: {str(e)}") from e
 
     async def search_by_title(
         self, 

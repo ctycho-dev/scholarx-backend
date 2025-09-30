@@ -24,6 +24,7 @@ class Article(Base, FullAuditMixin):
     slug: Mapped[str] = mapped_column(
         String(100), unique=True, nullable=False, index=True
     )
+    summary: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     html_content: Mapped[str] = mapped_column(Text, default="", nullable=False)
     cover_image: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     type: Mapped[str] = mapped_column(String(20), nullable=False)

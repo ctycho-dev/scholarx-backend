@@ -1,5 +1,7 @@
 # app/domain/article/service.py
+import re
 from typing import Optional, List
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 from app.domain.article.schema import (
@@ -39,17 +41,18 @@ class ArticleService:
         
         return await self.repo.get_by_user_id(self.db, target_user_id)
 
-    async def get_by_user_and_state(self, state: str) -> List[ArticleOut]:
+    async def get_by_user_and_state(self, state: ArticleState) -> List[ArticleOut]:
         """Get user's articles by state (e.g., drafts)."""
         if not self.user:
             raise ValueError("User context required")
         
-        if state == ArticleState.DRAFT:
-            return await self.repo.get_drafts_by_user(self.db, self.user.id)
-        else:
-            # For other states, get all user articles and filter
-            all_user_articles = await self.repo.get_by_user_id(self.db, self.user.id)
-            return [article for article in all_user_articles if article.state == state]
+        if not self.user.profile_id:
+            raise ValueError("User profile required")
+        
+        articles = await self.repo.get_by_user_and_state(
+            self.db, self.user.profile_id, state
+        )
+        return articles
 
     async def get_by_state(self, state: str) -> List[ArticleOut]:
         """Get articles by state."""
@@ -67,12 +70,13 @@ class ArticleService:
         
         # Set user_id and default state
         article_data = data.model_dump()
-        article_data['user_id'] = self.user.id
+        article_data['author_profile_id'] = self.user.profile_id
         article_data['state'] = ArticleState.DRAFT
+        article_data['slug'] = f"draft-{uuid.uuid4().hex[:8]}"
         
         return await self.repo.create(
-            self.db, 
-            article_data, 
+            self.db,
+            article_data,
             current_user_id=self.user.id
         )
 
@@ -80,15 +84,15 @@ class ArticleService:
         """Update article."""
         if not self.user:
             raise ValueError("User context required")
-        
+
         # Check ownership
         existing_article = await self.repo.get_by_id(self.db, article_id)
         if not existing_article:
             raise HTTPException(status_code=404, detail="Article not found")
-        
+
         if hasattr(existing_article, 'user_id') and existing_article.user_id != self.user.id:
             raise ValueError("You can only edit your own articles")
-        
+
         return await self.repo.update(
             self.db,
             article_id,
@@ -98,7 +102,24 @@ class ArticleService:
 
     async def publish(self, article_id: int) -> ArticleOut:
         """Publish an article."""
-        update_data = ArticleUpdate(state=ArticleState.PUBLISHED)
+        if not self.user:
+            raise ValueError("User context required")
+
+        article = await self.repo.get_by_id(self.db, article_id)
+        if not article:
+            raise HTTPException(status_code=404, detail='Article not found.')
+        
+        # Check ownership
+        if article.author_profile_id != self.user.profile_id:
+            raise ValueError("You can only publish your own articles")
+
+        base_slug = self.generate_slug(article.title)
+        unique_slug = f"{base_slug}-{uuid.uuid4().hex[:8]}"
+        
+        update_data = ArticleUpdate(
+            state=ArticleState.PUBLISHED,
+            slug=unique_slug
+        )
         return await self.update(article_id, update_data)
 
     async def unpublish(self, article_id: int) -> ArticleOut:
@@ -110,15 +131,15 @@ class ArticleService:
         """Delete article."""
         if not self.user:
             raise ValueError("User context required")
-        
+
         # Check ownership
         existing_article = await self.repo.get_by_id(self.db, article_id)
         if not existing_article:
             raise HTTPException(status_code=404, detail="Article not found")
-        
+
         if hasattr(existing_article, 'user_id') and existing_article.user_id != self.user.id:
             raise ValueError("You can only delete your own articles")
-        
+
         # Use soft delete if available
         if hasattr(self.repo.model, 'deleted_at'):
             await self.repo.soft_delete(self.db, article_id, self.user.id)
@@ -128,3 +149,20 @@ class ArticleService:
     async def search(self, search_term: str) -> List[ArticleOut]:
         """Search articles by title."""
         return await self.repo.search_by_title(self.db, search_term)
+    
+    def generate_slug(self, title: str) -> str:
+        """Generate base slug from title."""
+        # Remove special characters, keep only alphanumeric, spaces, and hyphens
+        cleaned = re.sub(r'[^\w\s-]', '', title.lower())
+        # Replace spaces with hyphens
+        slug = re.sub(r'\s+', '-', cleaned)
+        # Remove multiple consecutive hyphens
+        slug = re.sub(r'-+', '-', slug)
+        # Remove leading/trailing hyphens
+        slug = slug.strip('-')
+
+        if len(slug) > 70:  # Leave room for -12345678
+            slug = slug[:70].rstrip('-')
+        
+        # Fallback if slug becomes empty
+        return slug if slug else "untitled"

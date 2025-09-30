@@ -116,6 +116,7 @@ class UserOut(BaseModel):
 
     account_type: str | None
     has_profile: bool = False
+    profile_id: int | None = None
 
     role: UserRole
     has_accepted_terms: bool
